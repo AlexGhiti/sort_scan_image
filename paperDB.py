@@ -33,7 +33,6 @@ class paperDB:
     def table_update(tab_name, dictionary):
         return
 
-
     def table_add_column(tab_name):
         return
 
@@ -58,10 +57,28 @@ class paperDB:
 
         return self.db_cursor.fetchall()
 
+    def table_get_all_vector_for_svm(self, tab_name, dictionary):
+        # First retrieve numerical vector parts to give as
+        # support vectors. And then retrieve their category.
+        # That's why requests are ordered, because I make it
+        # in two steps (TODO check if not possible to make it
+        # one request).
+        str_list_word = ','.join(dictionary)
+        sql_cmd = "SELECT %s FROM %s v ORDER BY file_name"
+        sql_cmd %= (str_list_word, tab_name)
+        self.db_cursor.execute(sql_cmd)
+        svm_vector = self.db_cursor.fetchall()
+
+        sql_cmd = "SELECT category FROM %s v ORDER BY file_name"
+        sql_cmd %= tab_name
+        self.db_cursor.execute(sql_cmd)
+        list_category = self.db_cursor.fetchall()
+
+        return (svm_vector, list_category)
 
     # Smart accessors to database
     def table_get_vector_by_name(self, tab_name, file_name):
-        sql_cmd = "SELECT * FROM %s v WHERE v.file_name = %s" % (tab_name,
+        sql_cmd = "SELECT category FROM %s v WHERE v.file_name = \"%s\"" % (tab_name,
                                                                  file_name)
         self.db_cursor.execute(sql_cmd)
 
