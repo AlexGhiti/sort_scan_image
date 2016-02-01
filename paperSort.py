@@ -13,10 +13,13 @@ class paperSort:
         with codecs.open(dictionary_path, 'r', 'utf-8') as fdict:
             self.dictionary = fdict.read().split()
         self.dictionary = sorted([unidecode(word.lower()) for word in self.dictionary])
+        self.clf = svm.SVC()
+
 
     # TODO Use psort et pdb
     def read_content_ocr_file(self, path):
         try:
+            print(path)
             fin = codecs.open(path, 'r', 'utf-8')
         except IOError:
             print("Problem opening file : %s" % path)
@@ -75,9 +78,9 @@ class paperSort:
     # TODO Take care that some words are truncated by tokenisation
     # and bad ocr: try to fusion two consecutive words to see if
     # better results. http://blog.fouadhamdi.com/introduction-a-nltk/
-    def svm_sort(self, clf, path, paper_db):
+    def svm_sort(self, clf, scan_path, paper_db, create_db):
         # 1/ Open OCRised file and read its content.
-        content = self.read_content_ocr_file(path)
+        content = self.read_content_ocr_file(scan_path + ".txt")
         if (content is None):
             return None
 
@@ -88,10 +91,10 @@ class paperSort:
         vect_res = self.get_vector_list_word(self.dictionary, list_content_word)
 
         # 4/ Svm Magic :)
-        svm_category = clf.predict(vect_res)
-
-        print("Le nouveau document est : %s" % svm_category)
+        if not create_db:
+            svm_category = clf.predict(vect_res)
+            print("Le nouveau document est : %s" % svm_category)
 
         # 5/ Insert the vector with the category guessed by svm.
-        self.add_vector_db(paper_db, vect_res, path, svm_category)
+        self.add_vector_db(paper_db, vect_res, scan_path, svm_category)
 

@@ -1,79 +1,99 @@
 #!/usr/bin/env python
 
-from sklearn import svm
-import os
+import time
 from os.path import isfile, join
 from os import listdir
-import errno
+import re
 import subprocess
+import argparse
+
+from sklearn import svm
+
 from paperDB import paperDB
 from paperSort import paperSort
 
 
-def get_scanned_doc_path():
-    # Path to scanned documents
-    scanned_doc_path = "/tmp/sort_scan_image/"
-    # mkdir -p in case it does not exist.
-    try:
-        os.makedirs(scanned_doc_path)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST and os.path.isdir(scanned_doc_path):
-            pass
-        else:
-            raise
-
-    return scanned_doc_path
+class Paper:
+    # scan_doc_dest may be an url or a local dest.
+    def __init__(self, scan_doc_src, scan_doc_dest,
+                    dict_path, db_path):
+        self.scan_doc_src = scan_doc_src
+        self.scan_doc_dest = scan_doc_dest
+        self.paper_sort = paperSort(self.dict_path)
+        self.paper_db = paperDB(self.db_path, self.paper_sort.dictionary)
+        self.paper_db.table_create(self.db_path)
 
 
-def teach_svm(paper_db, dictionary):
-    print(dictionary)
-    # Get the list of vectors from db.
-    (list_sample_vector, list_category) = paper_db.table_get_all_vector_for_svm("training_sample", dictionary)
-    print(list_sample_vector)
-    print(list_category)
-    clf = svm.SVC()
-    if len(list_sample_vector) != 0:
-        clf.fit(list_sample_vector, [i[0] for i in list_category])
+    def create_db():
+        pass
 
-    return clf
+    def teach_svm():
+        print(self.paper_sort.dictionary)
+        # Get the list of vectors from db.
+        (list_sample_vector, list_category) =
+            paper_db.table_get_all_vector_for_svm(
+                    "training_sample", self.paper_sort.dictionary)
+        print(list_sample_vector)
+        print(list_category)
+
+        if len(list_sample_vector) != 0:
+            self.paper_sort.clf.fit(list_sample_vector,
+                                    [i[0] for i in list_category])
+
+    def parse_scan_doc(ocr):
+        # Get all the scanned images.
+        scan_doc_list = [f for f in listdir(self.scan_doc_src) if isfile(join(self.scan_doc_src, f))]
+
+        # Apply the whole process to any file in it !
+        for fname in scan_doc_list:
+            if re.match("scan_and_sort.*tmp$", fname) is None:
+                continue
+
+            # print("Converting %s" % fname)
+            # res = subprocess.call(["convert", scan_doc_src + fname,
+            #                        scan_doc_src + fname + ".jpg"])
+
+            print("OCRing %s" % fname)
+            res = subprocess.call(["tesseract",	self.scan_doc_src + fname,
+                                   self.scan_doc_src + fname,
+                                   "-l fra"])
+            if res == 0:
+                print("Tesseract on %s ok." % fname)
+                if not ocr:
+                    paper_sort.svm_sort(self.scan_doc_src + fname, self.paper_db)
+                    # TODO add copying file to its dest.
+
+parser = argparse.ArgumentParser(description = 'Process grep_and_sed arguments.')
+# Create db from existing OCRised doc.
+parser.add_argument('--create_db', action='store_true',
+                    help = 'Old string to search and replace.')
+# Use this option to OCRise all doc to use in create_db option.
+parser.add_argument('--ocr', action='store_true',
+                    help = 'Old string to search and replace.')
+parser.add_argument('--scan_doc_src', default = "/tmp/sort_scan_image/",
+                    help = 'Old string to search and replace.')
+parser.add_argument('--scan_doc_dest', default = "/tmp/sort_scan_image_dest/",
+                    help = 'Old string to search and replace.')
+parser.add_argument('--dict', default = "/tmp/sort_scan_image/",
+                    help = 'Old string to search and replace.')
+parser.add_argument('--db', default = "/tmp/sort_scan_image/",
+                    help = 'Old string to search and replace.')
+
+args = parser.parse_args()
+
+paper = Paper(args.scan_doc_src, args.scan_doc_dest, args.dict, args.db)
+
+# We create the database at first based on path hierarchy inside
+# scan_doc_src: that way, it is easy(ier) to move files around
+# than write category of documents in a text database.
+if args.create_db:
+    paper.create_db()
+elif args.ocr:
+    paper.parse_doc_scan(True)
+else
+    while (1):
+        paper.parse_doc_scan(False)
+        time.sleep(1)
 
 
-def init():
-    scanned_doc_path = get_scanned_doc_path()
-    paper_sort = paperSort("dictionary")
-    paper_db = paperDB("test.db", paper_sort.dictionary)
-    paper_db.table_create("training_sample")
-    # Init svm with database
-    clf = teach_svm(paper_db, paper_sort.dictionary)
-
-    return [scanned_doc_path, paper_db, paper_sort, clf]
-
-
-def loop(scanned_doc_path, paper_db, paper_sort, clf):
-    # Get all the scanned images.
-    scanned_doc_list = [f for f in listdir(scanned_doc_path) if isfile(join(scanned_doc_path, f))]
-
-    # Apply the whole process to any file in it !
-    for file_name in scanned_doc_list:
-        # TODO use regexp here.
-        if "scan_and_sort" not in file_name and "tmp" not in file_name:
-            continue
-
-        print("Converting %s" % file_name)
-        res = subprocess.call(["convert", scanned_doc_path + file_name,
-                               scanned_doc_path + file_name + ".jpg"])
-
-        print("OCRing %s" % file_name)
-        res = subprocess.call(["tesseract",	scanned_doc_path + file_name,
-                               scanned_doc_path + file_name,
-                               "-l fra"])
-        if (res == 0):
-            print("Tesseract on %s ok." % file_name)
-            paper_sort.svm_sort(clf, scanned_doc_path + file_name, paper_db)
-
-
-# TODO a class of scan_and_sort
-[scanned_doc_path, paper_db, paper_sort, clf] = init()
-# while (1):
-loop(scanned_doc_path, paper_db, paper_sort, clf)
 
