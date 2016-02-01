@@ -18,6 +18,7 @@ class paperDB:
     # Table contains vector for svm learning, the filename of the image and
     # the category in which it is stored.
     def table_create(self, tab_name):
+        print("*** Creating table %s..." % "paper")
         str_list_dict = ' INTEGER ,'.join(self.dictionary) + " INTEGER"
         str_list_dict += ', file_name STRING'
         str_list_dict += ', category STRING'

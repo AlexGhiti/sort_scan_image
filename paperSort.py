@@ -1,5 +1,6 @@
 import codecs
 from nltk.corpus import stopwords
+from sklearn import svm
 from unidecode import unidecode
 import collections
 
@@ -13,10 +14,13 @@ class paperSort:
         with codecs.open(dictionary_path, 'r', 'utf-8') as fdict:
             self.dictionary = fdict.read().split()
         self.dictionary = sorted([unidecode(word.lower()) for word in self.dictionary])
+        self.clf = svm.SVC()
+        print(self.dictionary)
 
     # TODO Use psort et pdb
     def read_content_ocr_file(self, path):
         try:
+            print(path)
             fin = codecs.open(path, 'r', 'utf-8')
         except IOError:
             print("Problem opening file : %s" % path)
@@ -68,30 +72,10 @@ class paperSort:
         # TODO Send the url, the list of category (html mail) so that in one click
         # we can send a notif to this program to change the category.
         file_name = path.split('/')[-1]
-        if paper_db.file_name_exists("training_sample", file_name) is False:
-            paper_db.table_add_vector("training_sample", vect_res, file_name,
+        if paper_db.file_name_exists("paper", file_name) is False:
+            paper_db.table_add_vector("paper", vect_res, file_name,
                                         svm_category)
 
     # TODO Take care that some words are truncated by tokenisation
     # and bad ocr: try to fusion two consecutive words to see if
     # better results. http://blog.fouadhamdi.com/introduction-a-nltk/
-    def svm_sort(self, clf, path, paper_db):
-        # 1/ Open OCRised file and read its content.
-        content = self.read_content_ocr_file(path)
-        if (content is None):
-            return None
-
-        # 2/ Tokenisation of the file content.
-        list_content_word = self.tokenise_content(content)
-
-        # 3/ Generate vector of words according to current dictionary.
-        vect_res = self.get_vector_list_word(self.dictionary, list_content_word)
-
-        # 4/ Svm Magic :)
-        svm_category = clf.predict(vect_res)
-
-        print("Le nouveau document est : %s" % svm_category)
-
-        # 5/ Insert the vector with the category guessed by svm.
-        self.add_vector_db(paper_db, vect_res, path, svm_category)
-
