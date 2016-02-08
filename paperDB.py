@@ -23,6 +23,7 @@ class paperDB:
         str_list_dict += ', category STRING'
         sql_cmd = "CREATE TABLE IF NOT EXISTS %s (%s)" % (tab_name, str_list_dict)
 
+        print sql_cmd
         self.db_cursor.execute(sql_cmd)
         self.db_conn.commit()
 
@@ -46,6 +47,7 @@ class paperDB:
                                                                   file_name,
                                                                   category)
 
+        print(sql_cmd)
         self.db_cursor.execute(sql_cmd)
         self.db_conn.commit()
 
