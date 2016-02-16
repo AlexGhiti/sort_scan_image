@@ -79,23 +79,3 @@ class paperSort:
     # TODO Take care that some words are truncated by tokenisation
     # and bad ocr: try to fusion two consecutive words to see if
     # better results. http://blog.fouadhamdi.com/introduction-a-nltk/
-    def svm_sort(self, scan_path, paper_db, create_db):
-        # 1/ Open OCRised file and read its content.
-        content = self.read_content_ocr_file(scan_path + ".txt")
-        if (content is None):
-            return None
-
-        # 2/ Tokenisation of the file content.
-        list_content_word = self.tokenise_content(content)
-
-        # 3/ Generate vector of words according to current dictionary.
-        vect_res = self.get_vector_list_word(self.dictionary, list_content_word)
-
-        # 4/ Svm Magic :)
-        if not create_db:
-            svm_category = self.clf.predict(vect_res)
-            print("Le nouveau document est : %s" % svm_category)
-
-        # 5/ Insert the vector with the category guessed by svm.
-        self.add_vector_db(paper_db, vect_res, scan_path, svm_category)
-
