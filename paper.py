@@ -79,18 +79,6 @@ class Paper:
             self.add_to_db_with_category(p + ".txt",
                                         p.split('/')[-2])
 
-    def teach_svm(self):
-        print(self.paper_sort.dictionary)
-        # Get the list of vectors from db.
-        (list_sample_vector, list_category) = self.paper_db.table_get_all_vector_for_svm(
-                                                "paper", self.paper_sort.dictionary)
-        print(list_sample_vector)
-        print(list_category)
-
-        if len(list_sample_vector) != 0:
-            self.paper_sort.clf.fit(list_sample_vector,
-                                    [i[0] for i in list_category])
-
 
 parser = argparse.ArgumentParser(description = 'Process grep_and_sed arguments.')
 # Create db from existing OCRised paper.
