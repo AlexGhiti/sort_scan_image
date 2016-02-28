@@ -56,7 +56,8 @@ class Paper:
     def __get_paper_list(self, path):
         paper_list = []
         for root, directories, filenames in os.walk(path):
-            paper_list.extend([os.path.join(root, f) for f in filenames if re.match(".*tmp$", f) ])
+            if not "unknown" in root:
+                paper_list.extend([os.path.join(root, f) for f in filenames if re.match(".*tmp$", f) ])
 
         return paper_list
 

@@ -10,24 +10,42 @@ class paperDB:
         # Attribute definition
         # Path where are stored papers. (eg Owncloud data path).
         # Maybe useless...
-        # Necessary
-        self.db_conn = sqlite3.connect(db_path)
-        self.db_cursor = self.db_conn.cursor()
         self.dictionary = dictionary
+        # Necessary
+        try:
+            self.db_conn = sqlite3.connect(db_path)
+            self.db_cursor = self.db_conn.cursor()
+        except sqlite3.OperationalError:
+            print('Erreur la table existe déjà')
+        except Exception as e:
+            print("Erreur")
+            conn.rollback()
+            # raise e
 
     # Table contains vector for svm learning, the filename of the image and
     # the category in which it is stored.
     def table_create(self, tab_name):
-        print("*** Creating table %s..." % "paper")
+        print("*** Creating table %s..." % "paper", end = "", flush = True)
+
         str_list_dict = ' INTEGER ,'.join(self.dictionary) + " INTEGER"
         str_list_dict += ', file_name STRING'
         str_list_dict += ', category STRING'
-        sql_cmd = "CREATE TABLE IF NOT EXISTS %s (%s)" % (tab_name, str_list_dict)
+        # sql_cmd = "CREATE TABLE IF NOT EXISTS %s (%s)" % (tab_name, str_list_dict)
+        sql_cmd = "CREATE TABLE %s (%s)" % (tab_name, str_list_dict)
 
-        self.db_cursor.execute(sql_cmd)
-        self.db_conn.commit()
+        try:
+            self.db_cursor.execute(sql_cmd)
+            self.db_conn.commit()
+        except sqlite3.OperationalError:
+            print("Already exists. OK.")
+        except Exception as e:
+            print("Error creating table. (%s)", e.__class__.__name__)
+            self.db_conn.rollback()
+        else:
+            print("OK.")
 
     def table_delete(self, tab_name):
+        print("*** Deleting table %s..." % "paper")
         self.db_cursor.execute("DROP TABLE IF EXISTS " + tab_name)
         self.db_conn.commit()
 
@@ -39,16 +57,24 @@ class paperDB:
 
     # Raw accessors to database
     def table_add_vector(self, tab_name, vect, file_name, category):
-        print("New vect ")
-        print(vect)
+        print("*** Adding file %s into category \"%s\" (table \"%s\")..." % (file_name,
+                                                                category,
+                                                                "paper"), end = "",
+                                                                flush = True)
         str_list_value = ','.join(str(v) for v in vect)
         sql_cmd = "INSERT INTO %s VALUES (%s, \"%s\", \"%s\")" % (tab_name,
                                                                   str_list_value,
                                                                   file_name,
                                                                   category)
 
-        self.db_cursor.execute(sql_cmd)
-        self.db_conn.commit()
+        try:
+            self.db_cursor.execute(sql_cmd)
+            self.db_conn.commit()
+        except Exception as e:
+            print("Error inserting vector. (%s)", e.__class__.__name__)
+            self.db_conn.rollback()
+        else:
+            print("OK.")
 
         return
 
@@ -91,3 +117,16 @@ class paperDB:
                                                                 file_name)
         self.db_cursor.execute(sql_cmd)
         return (self.db_cursor.fetchone() != None)
+
+
+    def add_vector_db(self, vect_res, path, svm_category):
+        # Here we directly insert the vector in the database with the
+        # result of svm algo. Anyway, a notification will be sent to user with
+        # the URL to the image and the category found. If the category is wrong,
+        # the user will be able to modify it.
+        # TODO Send the url, the list of category (html mail) so that in one click
+        # we can send a notif to this program to change the category.
+        file_name = path.split('/')[-1]
+        if self.file_name_exists("paper", file_name) is False:
+            self.table_add_vector("paper", vect_res, file_name,
+                                        svm_category)
