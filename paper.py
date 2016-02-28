@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import time
 import os
 import re
 import subprocess
@@ -116,14 +115,16 @@ parser.add_argument('--scan_paper_dest', default = "/tmp/sort_scan_image_dest/",
                     help = 'Only used with create_db* = false: root path (local '
                             'or remote) where classified papers must be sent '
                             '(Your server for example).')
-parser.add_argument('--dict', default = "/tmp/sort_scan_image/dictionary",
-                    help = 'Full path to the dictionary to use to classify.')
-parser.add_argument('--db', default = "/tmp/sort_scan_image/test.db",
-                    help = 'Full path to the db to use to keep classification.')
+parser.add_argument('--dict', default = "dictionary",
+                    help = 'Dictionary filename to use to classify.')
+parser.add_argument('--db', default = "paper.db",
+                    help = 'Db filename to use to keep classification.')
 
 args = parser.parse_args()
 
-paper = Paper(args.scan_paper_src, args.scan_paper_dest, args.dict, args.db)
+paper = Paper(args.scan_paper_src, args.scan_paper_dest,
+            os.path.join(args.scan_paper_src, args.dict),
+            os.path.join(args.scan_paper_src, args.db))
 
 wm = pyinotify.WatchManager()  # Watch Manager
 mask = pyinotify.IN_CREATE  # watched events
