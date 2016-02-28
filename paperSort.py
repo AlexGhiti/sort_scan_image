@@ -4,7 +4,6 @@ from sklearn import svm
 from unidecode import unidecode
 import collections
 
-
 class paperSort:
     def __init__(self, dictionary_path):
         # Get french stopwords from nltk
@@ -15,7 +14,6 @@ class paperSort:
             self.dictionary = fdict.read().split()
         self.dictionary = sorted([unidecode(word.lower()) for word in self.dictionary])
         self.clf = svm.SVC()
-        print(self.dictionary)
 
     # TODO Use psort et pdb
     def read_content_ocr_file(self, path):
