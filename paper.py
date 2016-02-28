@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import re
 import subprocess
+import shutil
 import argparse
 from unidecode import unidecode
 
@@ -17,7 +18,8 @@ class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
         if re.match(".*tmp$", event.pathname):
             paper.ocr(event.pathname)
-            paper.add_to_db_with_svm(event.pathname + ".txt")
+            category = paper.add_to_db_with_svm(event.pathname + ".txt")
+            paper.move_doc(event.pathname, category)
 
 class Paper:
     # scan_paper_dest may be an url or a local dest.
@@ -73,11 +75,18 @@ class Paper:
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         category)
 
+
+    def move_doc(self, paper_path, category):
+        shutil.move(paper_path, os.path.join(self.scan_paper_dest, category))
+        shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category))
+
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         svm_category)
+        return svm_category
+
 
     # May be to discuss, but I prefer sorting documents in
     # directory by hand rather than writing a document giving
@@ -114,7 +123,7 @@ parser.add_argument('--scan_paper_src', default = "/tmp/sort_scan_image/",
                            'already classified.\n'
                             'With create_db* = false: path where freshly '
                             'scanned papers are copied after scan.')
-parser.add_argument('--scan_paper_dest', default = "/tmp/sort_scan_image_dest/",
+parser.add_argument('--scan_paper_dest', default = "",
                     help = 'Only used with create_db* = false: root path (local '
                             'or remote) where classified papers must be sent '
                             '(Your server for example).')
@@ -124,6 +133,9 @@ parser.add_argument('--db', default = "paper.db",
                     help = 'Db filename to use to keep classification.')
 
 args = parser.parse_args()
+
+if args.scan_paper_dest == "":
+    args.scan_paper_dest = args.scan_paper_src
 
 paper = Paper(args.scan_paper_src, args.scan_paper_dest,
             os.path.join(args.scan_paper_src, args.dict),
