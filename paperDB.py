@@ -57,8 +57,7 @@ class paperDB:
     def table_add_vector(self, tab_name, vect, file_name, category):
         print("*** Adding file %s into category \"%s\" (table \"%s\")..." % (file_name,
                                                                 category,
-                                                                "paper"), end = "",
-                                                                flush = True)
+                                                                "paper"), end = "")
         str_list_value = ','.join(str(v) for v in vect)
         sql_cmd = "INSERT INTO %s VALUES (%s, \"%s\", \"%s\")" % (tab_name,
                                                                   str_list_value,
