@@ -15,8 +15,6 @@ class paperDB:
         try:
             self.db_conn = sqlite3.connect(db_path)
             self.db_cursor = self.db_conn.cursor()
-        except sqlite3.OperationalError:
-            print('Erreur la table existe déjà')
         except Exception as e:
             print("Erreur")
             conn.rollback()
@@ -25,7 +23,7 @@ class paperDB:
     # Table contains vector for svm learning, the filename of the image and
     # the category in which it is stored.
     def table_create(self, tab_name):
-        print("*** Creating table %s..." % "paper", end = "", flush = True)
+        print("*** Creating table %s..." % "paper")
 
         str_list_dict = ' INTEGER ,'.join(self.dictionary) + " INTEGER"
         str_list_dict += ', file_name STRING'
@@ -59,8 +57,7 @@ class paperDB:
     def table_add_vector(self, tab_name, vect, file_name, category):
         print("*** Adding file %s into category \"%s\" (table \"%s\")..." % (file_name,
                                                                 category,
-                                                                "paper"), end = "",
-                                                                flush = True)
+                                                                "paper"))
         str_list_value = ','.join(str(v) for v in vect)
         sql_cmd = "INSERT INTO %s VALUES (%s, \"%s\", \"%s\")" % (tab_name,
                                                                   str_list_value,

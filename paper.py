@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import argparse
+from unidecode import unidecode
 
 from paperDB import paperDB
 from paperSort import paperSort
@@ -12,10 +13,10 @@ import pyinotify
 
 class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
-        print "New paper:", event.pathname
         if re.match(".*tmp$", event.pathname):
             paper.ocr(event.pathname)
             paper.add_to_db_with_svm(event.pathname + ".txt")
+
 
 class Paper:
     # scan_paper_dest may be an url or a local dest.
@@ -27,7 +28,7 @@ class Paper:
         self.paper_db = paperDB(db_path, self.paper_sort.dictionary)
         self.paper_db.table_create("paper")
 
-    def __ocr(self, fname):
+    def ocr(self, fname):
             #print("%s" % ["convert", fname, "{0}.jpg".format(fname)])
             #res = subprocess.call(["convert", fname,
             #                                "{0}.jpg".format(fname)])
