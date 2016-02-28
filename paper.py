@@ -8,11 +8,12 @@ import subprocess
 import shutil
 import argparse
 from unidecode import unidecode
+import smtplib
+from email.mime.text import MIMEText
+import pyinotify
 
 from paperDB import paperDB
 from paperSort import paperSort
-
-import pyinotify
 
 class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
@@ -20,6 +21,7 @@ class EventHandler(pyinotify.ProcessEvent):
             paper.ocr(event.pathname)
             category = paper.add_to_db_with_svm(event.pathname + ".txt")
             paper.move_doc(event.pathname, category)
+            paper.send_mail_result(event.pathname, category)
 
 class Paper:
     # scan_paper_dest may be an url or a local dest.
@@ -68,6 +70,27 @@ class Paper:
 
         return paper_list
 
+    def send_mail_result(self, paper_path, category):
+        msg = MIMEText(paper_path)
+
+        # Send the message via our own SMTP server, but don't include the
+        # envelope header.
+        with open("pass", "r") as f:
+            content_pass = f.readlines()
+
+        server = content_pass[0].strip('\n')
+        user = content_pass[1].strip('\n')
+        mdp = content_pass[2].strip('\n')
+
+        msg['Subject'] = category
+        msg['From'] = user
+        msg['To'] = "alexandre@ghiti.fr"
+
+        s = smtplib.SMTP(server, 25)
+        s.login(user, mdp)
+        s.sendmail(user, ["alexandre@ghiti.fr"], msg.as_string())
+        s.quit()
+
     # Do 'cleanup' on ocr text and adds the result to db.
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
@@ -76,14 +99,20 @@ class Paper:
 
 
     def move_doc(self, paper_path, category):
-        shutil.move(paper_path, os.path.join(self.scan_paper_dest, category))
-        shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category))
+        try:
+            shutil.move(paper_path, os.path.join(self.scan_paper_dest, category))
+            shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category))
+        except Exception:
+            print("*** Moving paper %s...Error moving paper." % paper_path)
+        else:
+            print("*** Moving paper %s...OK." % paper_path)
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         svm_category)
+
         return svm_category
 
     # May be to discuss, but I prefer sorting documents in
