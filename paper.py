@@ -64,14 +64,14 @@ class Paper:
     # Do 'cleanup' on ocr text and adds the result to db.
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
-        self.paper_sort.add_vector_db(self.paper_db, vect_res, ocr_paper_path,
+        self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         category)
 
     def add_to_db_with_svm(self, ocr_paper_path):
-        vect_res = self.__parse_ocr_paper(ocr_paper_path);
-        svm_category = self.paper_sort.clf.predict(vect_res)
-        print("Le nouveau document est : %s" % svm_category)
-        self.paper_sort.add_vector_db(self.paper_db, vect_res, ocr_paper_path,
+        vect_res = self.__parse_ocr_paper(ocr_paper_path)
+        print(vect_res)
+        svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
+        self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         svm_category)
 
     # May be to discuss, but I prefer sorting documents in
@@ -88,12 +88,9 @@ class Paper:
                                         p.split('/')[-2])
 
     def teach_svm(self):
-        print(self.paper_sort.dictionary)
         # Get the list of vectors from db.
         (list_sample_vector, list_category) = self.paper_db.table_get_all_vector_for_svm(
                                                 "paper", self.paper_sort.dictionary)
-        print(list_sample_vector)
-        print(list_category)
 
         if len(list_sample_vector) != 0:
             self.paper_sort.clf.fit(list_sample_vector,
