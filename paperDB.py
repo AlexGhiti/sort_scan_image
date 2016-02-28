@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import sqlite3
 
 # One instance of paperDB deals with one database (as much table
@@ -15,17 +17,13 @@ class paperDB:
         try:
             self.db_conn = sqlite3.connect(db_path)
             self.db_cursor = self.db_conn.cursor()
-        except sqlite3.OperationalError:
-            print('Erreur la table existe déjà')
         except Exception as e:
-            print("Erreur")
-            conn.rollback()
-            # raise e
+            print("Error creating table. (%s)", e.__class__.__name__)
 
     # Table contains vector for svm learning, the filename of the image and
     # the category in which it is stored.
     def table_create(self, tab_name):
-        print("*** Creating table %s..." % "paper", end = "", flush = True)
+        print("*** Creating table %s..." % "paper", end = "")
 
         str_list_dict = ' INTEGER ,'.join(self.dictionary) + " INTEGER"
         str_list_dict += ', file_name STRING'

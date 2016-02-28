@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import os
 import re
 import subprocess
 import argparse
+from unidecode import unidecode
 
 from paperDB import paperDB
 from paperSort import paperSort
@@ -12,7 +15,6 @@ import pyinotify
 
 class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
-        print "New paper:", event.pathname
         if re.match(".*tmp$", event.pathname):
             paper.ocr(event.pathname)
             paper.add_to_db_with_svm(event.pathname + ".txt")
@@ -26,15 +28,19 @@ class Paper:
         self.paper_sort = paperSort(dict_path)
         self.paper_db = paperDB(db_path, self.paper_sort.dictionary)
         self.paper_db.table_create("paper")
+        self.log_file = open("log.txt", "w")
 
-    def __ocr(self, fname):
+
+    def ocr(self, fname):
             #print("%s" % ["convert", fname, "{0}.jpg".format(fname)])
             #res = subprocess.call(["convert", fname,
             #                                "{0}.jpg".format(fname)])
             print("*** OCRing %s..." % fname)
             res = subprocess.call(["tesseract", "{0}".format(fname),
                                                 "{0}".format(fname),
-                                                "-l fra"])
+                                                "-l fra"],
+                                                stdout = self.log_file,
+                                                stderr = self.log_file)
             if res != 0:
                 print("*** Tesseract failed on %s." % fname)
 
@@ -69,7 +75,6 @@ class Paper:
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
-        print(vect_res)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         svm_category)
