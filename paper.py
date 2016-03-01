@@ -11,6 +11,7 @@ from unidecode import unidecode
 import smtplib
 from email.mime.text import MIMEText
 import pyinotify
+import datetime
 
 from paperDB import paperDB
 from paperSort import paperSort
@@ -97,9 +98,12 @@ class Paper:
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
                                         category)
 
-
+    
+    # Move and rename files at the same time.
     def move_doc(self, paper_path, category):
         try:
+            new_paper_name = "%s%s" % (category, datetime.datetime.timestamp())
+            print(new_paper_name)
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category))
         except Exception:
