@@ -11,7 +11,7 @@ from unidecode import unidecode
 import smtplib
 from email.mime.text import MIMEText
 import pyinotify
-import datetime
+import time
 
 from paperDB import paperDB
 from paperSort import paperSort
@@ -20,9 +20,9 @@ class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
         if re.match(".*tmp$", event.pathname):
             paper.ocr(event.pathname)
-            category = paper.add_to_db_with_svm(event.pathname + ".txt")
-            paper.move_doc(event.pathname, category)
-            paper.send_mail_result(event.pathname, category)
+            (category, new_paper_name) = paper.add_to_db_with_svm(event.pathname + ".txt")
+            paper.move_doc(event.pathname, category, new_paper_name)
+            paper.send_mail_result(event.pathname, category, new_paper_name)
 
 class Paper:
     # scan_paper_dest may be an url or a local dest.
@@ -67,12 +67,12 @@ class Paper:
         paper_list = []
         for root, directories, filenames in os.walk(path):
             if not "unknown" in root:
-                paper_list.extend([os.path.join(root, f) for f in filenames if re.match(".*tmp$", f) ])
+                paper_list.extend([os.path.join(root, f) for f in filenames if re.match(".*_[0-9]+$", f) and not "txt" in f ])
 
         return paper_list
 
-    def send_mail_result(self, paper_path, category):
-        msg = MIMEText(paper_path)
+    def send_mail_result(self, paper_path, category, new_paper_name):
+        msg = MIMEText(paper_path + "->" + new_paper_name)
 
         # Send the message via our own SMTP server, but don't include the
         # envelope header.
@@ -96,16 +96,16 @@ class Paper:
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
+                                        ocr_paper_path.split('/')[-1].rstrip(".txt"),
                                         category)
 
     
     # Move and rename files at the same time.
-    def move_doc(self, paper_path, category):
+    def move_doc(self, paper_path, category, new_paper_name):
         try:
-            new_paper_name = "%s%s" % (category, datetime.datetime.timestamp())
-            print(new_paper_name)
-            shutil.move(paper_path, os.path.join(self.scan_paper_dest, category))
-            shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category))
+            # TODO if multiple files, create one file containing the whole thing.
+            shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
+            shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
         except Exception:
             print("*** Moving paper %s...Error moving paper." % paper_path)
         else:
@@ -114,10 +114,12 @@ class Paper:
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
+        new_paper_name = "%s_%s" % (svm_category, int(time.time()))
         self.paper_db.add_vector_db(vect_res, ocr_paper_path,
+                                        new_paper_name,
                                         svm_category)
 
-        return svm_category
+        return (svm_category, new_paper_name)
 
     # May be to discuss, but I prefer sorting documents in
     # directory by hand rather than writing a document giving
@@ -140,6 +142,7 @@ class Paper:
         if len(list_sample_vector) != 0:
             self.paper_sort.clf.fit(list_sample_vector,
                                     [i[0] for i in list_category])
+        print("*** Teaching svm...ok")
 
 
 parser = argparse.ArgumentParser(description = 'Process grep_and_sed arguments.')
