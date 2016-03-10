@@ -18,7 +18,6 @@ class paperSort:
     # TODO Use psort et pdb
     def read_content_ocr_file(self, path):
         try:
-            print(path)
             fin = codecs.open(path, 'r', 'utf-8')
         except IOError:
             print("Problem opening file : %s" % path)
