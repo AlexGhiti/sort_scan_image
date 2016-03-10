@@ -8,21 +8,47 @@ import subprocess
 import shutil
 import argparse
 from unidecode import unidecode
-import smtplib
-from email.mime.text import MIMEText
 import pyinotify
 import time
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 
 from paperDB import paperDB
 from paperSort import paperSort
 
+# "tmp" extension is necessary to identify scanned doc from categorized doc.
 class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
         if re.match(".*tmp$", event.pathname):
             paper.ocr(event.pathname)
             (category, new_paper_name) = paper.add_to_db_with_svm(event.pathname + ".txt")
+            if (category, new_paper_name) == (None, None):
+                return
             paper.move_doc(event.pathname, category, new_paper_name)
-            paper.send_mail_result(event.pathname, category, new_paper_name)
+
+    def process_IN_MOVED_TO(self, event):
+        # Do something only when moving papers images.
+        if re.match(".*_[0-9]*$", event.pathname):
+            from_category = event.src_pathname.split('/')[-2]
+            to_category = event.pathname.split('/')[-2]
+            paper.send_mail_result(from_category, to_category, event.pathname)
+            # Update database and SVM
+            # 1/ Database only if not from unknown (which means it is just after scan
+            #    and then it is not in db yet, the "unknown" case is handled by
+            #    create inotify hook).
+            if from_category != "unknown":
+                vect_res = paper.paper_db.table_remove_vector("paper",  
+                                                event.src_pathname.split('/')[-1])
+                if vect_res == -1:
+                    return
+                paper.paper_db.table_add_vector("paper", vect_res,
+                                                event.pathname.split('/')[-1],
+                                                to_category)
+
+            # 2/ SVM in any case. TODO
 
 class Paper:
     # scan_paper_dest may be an url or a local dest.
@@ -35,19 +61,7 @@ class Paper:
         self.paper_db.table_create("paper")
         self.log_file = open("log.txt", "w")
 
-    def ocr(self, fname):
-            #print("%s" % ["convert", fname, "{0}.jpg".format(fname)])
-            #res = subprocess.call(["convert", fname,
-            #                                "{0}.jpg".format(fname)])
-            print("*** OCRing %s..." % fname)
-            res = subprocess.call(["tesseract", "{0}".format(fname),
-                                                "{0}".format(fname),
-                                                "-l fra"],
-                                                stdout = self.log_file,
-                                                stderr = self.log_file)
-            if res != 0:
-                print("*** Tesseract failed on %s." % fname)
-
+    # TODO move that to paper_sort, all called functions are from there
     def __parse_ocr_paper(self, ocr_paper_path):
         # 1/ Open OCRised file and read its content.
         content = self.paper_sort.read_content_ocr_file(ocr_paper_path)
@@ -62,62 +76,140 @@ class Paper:
 
         return vect_res
 
+    def __get_category_list(self):
+        category_list = []
+        for root, directories, filenames in os.walk(self.scan_paper_src):
+            category_list.extend(directories)
+
+        return category_list
+
     # Returns the list of .tmp file only.
-    def __get_paper_list(self, path):
+    def __get_paper_list(self):
         paper_list = []
-        for root, directories, filenames in os.walk(path):
+        for root, directories, filenames in os.walk(self.scan_paper_src):
             if not "unknown" in root:
                 paper_list.extend([os.path.join(root, f) for f in filenames if re.match(".*_[0-9]+$", f) and not "txt" in f ])
 
         return paper_list
+    
+    def ocr(self, fname):
+        #print("%s" % ["convert", fname, "{0}.jpg".format(fname)])
+        #res = subprocess.call(["convert", fname,
+        #                                "{0}.jpg".format(fname)])
+        print("*** OCRing %s..." % fname)
+        res = subprocess.call(["tesseract", "{0}".format(fname),
+                                            "{0}".format(fname),
+                                            "-l fra"],
+                                            stdout = self.log_file,
+                                            stderr = self.log_file)
+        if res != 0:
+            print("*** Tesseract failed on %s." % fname)
 
-    def send_mail_result(self, paper_path, category, new_paper_name):
-        msg = MIMEText(paper_path + "->" + new_paper_name)
+    # TODO: Sending mail with html obliges us to use dashboard or any server...Ok or not?
+    # Request to modify category: /move/to_category/ANY_category/new_paper_name
+    def send_mail_result(self, from_category, to_category, new_paper_path):
+        print("*** Sending notification mail to %s..." % "alexandre@ghiti.fr", end = "")
 
+        new_paper_name = new_paper_path.split('/')[-1]
         # Send the message via our own SMTP server, but don't include the
         # envelope header.
         with open("pass", "r") as f:
             content_pass = f.readlines()
 
         server = content_pass[0].strip('\n')
-        user = content_pass[1].strip('\n')
-        mdp = content_pass[2].strip('\n')
+        port = content_pass[1].strip('\n')
+        user = content_pass[2].strip('\n')
+        mdp = content_pass[3].strip('\n')
 
-        msg['Subject'] = category
-        msg['From'] = user
-        msg['To'] = "alexandre@ghiti.fr"
+        msg_root = MIMEMultipart('mixed')
+        msg_root['Subject'] = "%s -> %s" % (from_category, to_category)
+        msg_root['From'] = user
+        msg_root['To'] = "alexandre@ghiti.fr"
 
-        s = smtplib.SMTP(server, 25)
-        s.login(user, mdp)
-        s.sendmail(user, ["alexandre@ghiti.fr"], msg.as_string())
-        s.quit()
+        # 1/ HTML part to easily chose new category.
+        text = "This paper has been moved from category \"%s\" to the category \"%s\".\n" % (from_category, to_category)
+        text += "If this seems like an error for you, please choose below the right "
+        text += "category."
+        # Create a link for each category
+        html = """\
+                <html>
+                    <head></head>
+                    <body>\n
+                """
+        category_list = self.__get_category_list()
+        for category in category_list:
+            if category != to_category:
+                html += "       <a href=\"http://192.168.0.12:3030/move/"
+                html +=                        to_category    + "/"
+                html +=                        category      + "/"
+                html +=                        new_paper_name
+                html +=                       "\">" + category + "</a><br>"
+        
+        html += """    </p>
+                    </body>
+                </html>
+                """
+        msg_root.attach(MIMEText(text, 'plain'))
+        msg_root.attach(MIMEText(html, 'html'))
 
-    # Do 'cleanup' on ocr text and adds the result to db.
-    def add_to_db_with_category(self, ocr_paper_path, category):
-        vect_res = self.__parse_ocr_paper(ocr_paper_path);
-        self.paper_db.add_vector_db(vect_res, ocr_paper_path,
-                                        ocr_paper_path.split('/')[-1].rstrip(".txt"),
-                                        category)
+        # 2/ Send the paper in the mail.
+        # Convert the pnm to jpg (and maybe shrink to save space).
+        # Moved paper path.
+        ret = subprocess.call(["convert", new_paper_path,
+                                        "-resize", "20%",
+                                        new_paper_path + ".jpg"])
+        if ret != 0:
+            print("Error converting paper (%d)." % ret)
+            return
+      
+        with open(new_paper_path + ".jpg") as fpaper_jpg:
+            mail_jpg = MIMEImage(fpaper_jpg.read())
+            fpaper_jpg.close()
+            msg_root.attach(mail_jpg)
 
-    
+        # Remove the jpg.
+        os.remove(new_paper_path + ".jpg")
+
+        # 3/ Effectively send the mail.
+        try:
+            s = smtplib.SMTP(server, port, None, 10)
+            s.login(user, mdp)
+            ret = s.sendmail(user, ["alexandre@ghiti.fr"], msg_root.as_string())
+            s.quit()
+        except smtplib.SMTPException as e:
+            print("Error sending email (%s)." % e.__class__.__name__)
+        else:
+            print("Ok.")
+
     # Move and rename files at the same time.
     def move_doc(self, paper_path, category, new_paper_name):
+        print("*** Moving paper %s..." % paper_path, end = "")
+        
         try:
             # TODO if multiple files, create one file containing the whole thing.
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
         except Exception:
-            print("*** Moving paper %s...Error moving paper." % paper_path)
+            print("Error moving paper (%s)." % e.__class__.__name__)
         else:
-            print("*** Moving paper %s...OK." % paper_path)
+            print("Ok.")
+    
+    # TODO this is not the right place for those functions;
+    # Do 'cleanup' on ocr text and adds the result to db.
+    # Returns -1 in case of error, 0 otherwise.
+    def add_to_db_with_category(self, ocr_paper_path, category):
+        vect_res = self.__parse_ocr_paper(ocr_paper_path);
+        if self.paper_db.table_add_vector("paper", vect_res, ocr_paper_path.split('/')[-1].rstrip(".txt"), category):
+            return -1
+        return 0
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         new_paper_name = "%s_%s" % (svm_category, int(time.time()))
-        self.paper_db.add_vector_db(vect_res, ocr_paper_path,
-                                        new_paper_name,
-                                        svm_category)
+
+        if self.paper_db.table_add_vector("paper", vect_res, new_paper_name, svm_category):
+            return (None, None)
 
         return (svm_category, new_paper_name)
 
@@ -125,8 +217,10 @@ class Paper:
     # directory by hand rather than writing a document giving
     # the category name of each document.
     def create_db(self, ocr):
-        self.paper_db.table_create("paper")
-        paper_list = self.__get_paper_list(self.scan_paper_src)
+        if self.paper_db.table_create("paper"):
+            return
+
+        paper_list = self.__get_paper_list()
         for p in paper_list:
             if ocr:
                 self.ocr(p)
@@ -134,15 +228,17 @@ class Paper:
             self.add_to_db_with_category(p + ".txt",
                                         p.split('/')[-2])
 
+    # TODO Reteach after all modifs in db (especially when a 
+    # new paper has been classified with classification from the user !
     def teach_svm(self):
         # Get the list of vectors from db.
         (list_sample_vector, list_category) = self.paper_db.table_get_all_vector_for_svm(
                                                 "paper", self.paper_sort.dictionary)
 
         if len(list_sample_vector) != 0:
-            self.paper_sort.clf.fit(list_sample_vector,
-                                    [i[0] for i in list_category])
-        print("*** Teaching svm...ok")
+            self.paper_sort.clf.fit(list_sample_vector, [ i[0] for i in list_category ])
+
+        print("*** Teaching svm...Ok.")
 
 
 parser = argparse.ArgumentParser(description = 'Process grep_and_sed arguments.')
@@ -175,8 +271,9 @@ paper = Paper(args.scan_paper_src, args.scan_paper_dest,
             os.path.join(args.scan_paper_src, args.dict),
             os.path.join(args.scan_paper_src, args.db))
 
-wm = pyinotify.WatchManager()  # Watch Manager
-mask = pyinotify.IN_CREATE  # watched events
+wm = pyinotify.WatchManager()
+# IN_MOVED_FROM must be watched to get src_pathname in IN_MOVED_TO.
+mask = pyinotify.IN_CREATE | pyinotify.IN_MOVED_TO | pyinotify.IN_MOVED_FROM
 
 # We create the database at first based on path hierarchy inside
 # scan_paper_src: that way, it is easy(ier) to move files around
@@ -193,6 +290,7 @@ else:
     paper.teach_svm()
     handler = EventHandler()
     notifier = pyinotify.Notifier(wm, handler)
-    wdd = wm.add_watch(os.path.join(args.scan_paper_src, "unknown"), mask, rec = True)
+    # wdd = wm.add_watch(os.path.join(args.scan_paper_src, "unknown"), mask, rec = True)
+    wdd = wm.add_watch(args.scan_paper_src, mask, rec = True)
 
     notifier.loop()
