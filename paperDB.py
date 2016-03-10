@@ -18,10 +18,14 @@ class paperDB:
             self.db_conn = sqlite3.connect(db_path)
             self.db_cursor = self.db_conn.cursor()
         except Exception as e:
-            print("Error creating table. (%s)", e.__class__.__name__)
+            print("Error connecting to database. (%s)", e.__class__.__name__)
+
+    def __get_dictionary_word_str(self):
+        return ','.join(self.dictionary)
 
     # Table contains vector for svm learning, the filename of the image and
     # the category in which it is stored.
+    # Returns -1 in case of error, 0 otherwise.
     def table_create(self, tab_name):
         print("*** Creating table %s..." % "paper", end = "")
 
@@ -35,12 +39,17 @@ class paperDB:
             self.db_cursor.execute(sql_cmd)
             self.db_conn.commit()
         except sqlite3.OperationalError:
-            print("Already exists. OK.")
+            print("Already exists. Ok.")
+            ret = -1
         except Exception as e:
             print("Error creating table. (%s)", e.__class__.__name__)
             self.db_conn.rollback()
+            ret = -1
         else:
             print("OK.")
+            ret = 0
+        finally:
+            return ret
 
     def table_delete(self, tab_name):
         print("*** Deleting table %s..." % "paper")
@@ -54,26 +63,59 @@ class paperDB:
         return
 
     # Raw accessors to database
+    # Returns -1 in case of error, 0 otherwise.
     def table_add_vector(self, tab_name, vect, file_name, category):
         print("*** Adding file %s into category \"%s\" (table \"%s\")..." % (file_name,
                                                                 category,
                                                                 "paper"), end = "")
+
+        if self.__file_name_exists(tab_name, file_name):
+            print("Error: file entry already exists.")
+            return
+
+        
         str_list_value = ','.join(str(v) for v in vect)
         sql_cmd = "INSERT INTO %s VALUES (%s, \"%s\", \"%s\")" % (tab_name,
                                                                   str_list_value,
                                                                   file_name,
                                                                   category)
-
         try:
             self.db_cursor.execute(sql_cmd)
             self.db_conn.commit()
         except Exception as e:
-            print("Error inserting vector. (%s)", e.__class__.__name__)
+            print("Error inserting vector. (%s)" % e.__class__.__name__)
             self.db_conn.rollback()
+            ret = -1
         else:
-            print("OK.")
+            print("Ok.")
+            ret = 0
+        finally:
+            return ret
 
-        return
+    # Returns -1 in case of error, vector otherwise.
+    def table_remove_vector(self, tab_name, file_name):
+        print("*** Removing file %s from table \"%s\"..." % (file_name, tab_name), end = "")
+
+        if not self.__file_name_exists("paper", file_name):
+            print("Error: file entry does not exist.")
+            return
+
+        vect = self.table_get_vector_by_name(tab_name, file_name)
+
+        sql_cmd = "DELETE FROM %s WHERE file_name = \"%s\"" % (tab_name, file_name)
+        print(sql_cmd)
+        try:
+            self.db_cursor.execute(sql_cmd)
+            self.db_conn.commit()
+        except Exception as e:
+            print("Error removing vector (%s).", e.__class__.__name__)
+            self.db_conn.rollback()
+            ret = [ -1 ]
+        else:
+            print("Ok.")
+            ret = vect
+        finally:
+            return ret
 
     def table_get_all_vector(self, tab_name):
         sql_cmd = "SELECT * FROM %s" % tab_name
@@ -87,7 +129,7 @@ class paperDB:
         # That's why requests are ordered, because I make it
         # in two steps (TODO check if not possible to make it
         # one request).
-        str_list_word = ','.join(dictionary)
+        str_list_word = self.__get_dictionary_word_str()
         sql_cmd = "SELECT %s FROM %s v ORDER BY file_name"
         sql_cmd %= (str_list_word, tab_name)
         self.db_cursor.execute(sql_cmd)
@@ -102,28 +144,14 @@ class paperDB:
 
     # Smart accessors to database
     def table_get_vector_by_name(self, tab_name, file_name):
-        sql_cmd = "SELECT category FROM %s v WHERE v.file_name = \"%s\"" % (tab_name,
-                                                                 file_name)
+        sql_cmd = "SELECT %s FROM %s v WHERE v.file_name = \"%s\"" % (self.__get_dictionary_word_str(), tab_name, file_name)
         self.db_cursor.execute(sql_cmd)
 
-        return self.db_cursor.fetchall()
+        return self.db_cursor.fetchone()
 
     # List of useful query
-    def file_name_exists(self, tab_name, file_name):
+    def __file_name_exists(self, tab_name, file_name):
         sql_cmd = "SELECT file_name FROM %s WHERE file_name = '%s'" % (tab_name,
                                                                 file_name)
         self.db_cursor.execute(sql_cmd)
         return (self.db_cursor.fetchone() != None)
-
-
-    def add_vector_db(self, vect_res, path, svm_category):
-        # Here we directly insert the vector in the database with the
-        # result of svm algo. Anyway, a notification will be sent to user with
-        # the URL to the image and the category found. If the category is wrong,
-        # the user will be able to modify it.
-        # TODO Send the url, the list of category (html mail) so that in one click
-        # we can send a notif to this program to change the category.
-        file_name = path.split('/')[-1]
-        if self.file_name_exists("paper", file_name) is False:
-            self.table_add_vector("paper", vect_res, file_name,
-                                        svm_category)
