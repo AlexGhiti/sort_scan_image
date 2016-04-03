@@ -172,7 +172,7 @@ class Paper:
 
         # 3/ Effectively send the mail.
         try:
-            s = smtplib.SMTP(server, port, None, 10)
+            s = smtplib.SMTP_SSL(server, port, None, None, None, 10)
             s.login(user, mdp)
             ret = s.sendmail(user, ["alexandre@ghiti.fr"], msg_root.as_string())
             s.quit()
