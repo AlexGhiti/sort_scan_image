@@ -40,7 +40,7 @@ class paperDB:
             self.db_conn.commit()
         except sqlite3.OperationalError:
             print("Already exists. Ok.")
-            ret = -1
+            ret = 0 
         except Exception as e:
             print("Error creating table. (%s)", e.__class__.__name__)
             self.db_conn.rollback()

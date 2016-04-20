@@ -58,7 +58,6 @@ class Paper:
         self.scan_paper_dest = scan_paper_dest
         self.paper_sort = paperSort(dict_path)
         self.paper_db = paperDB(db_path, self.paper_sort.dictionary)
-        self.paper_db.table_create("paper")
         self.log_file = open("log.txt", "w")
 
     # TODO move that to paper_sort, all called functions are from there
