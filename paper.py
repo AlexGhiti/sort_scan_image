@@ -53,11 +53,11 @@ class EventHandler(pyinotify.ProcessEvent):
 class Paper:
     # scan_paper_dest may be an url or a local dest.
     def __init__(self, scan_paper_src, scan_paper_dest,
-                    dict_path, db_path):
+                    dict_path):
         self.scan_paper_src = scan_paper_src
         self.scan_paper_dest = scan_paper_dest
         self.paper_sort = paperSort(dict_path)
-        self.paper_db = paperDB(db_path, self.paper_sort.dictionary)
+        self.paper_db = paperDB(self.paper_sort.dictionary)
         self.log_file = open("log.txt", "w")
 
     # TODO move that to paper_sort, all called functions are from there
@@ -258,8 +258,6 @@ parser.add_argument('--scan_paper_dest', default = "",
                             '(Your server for example).')
 parser.add_argument('--dict', default = "dictionary",
                     help = 'Dictionary filename to use to classify.')
-parser.add_argument('--db', default = "paper.db",
-                    help = 'Db filename to use to keep classification.')
 
 args = parser.parse_args()
 
@@ -267,8 +265,7 @@ if args.scan_paper_dest == "":
     args.scan_paper_dest = args.scan_paper_src
 
 paper = Paper(args.scan_paper_src, args.scan_paper_dest,
-            os.path.join(args.scan_paper_src, args.dict),
-            os.path.join(args.scan_paper_src, args.db))
+            os.path.join(args.scan_paper_src, args.dict))
 
 wm = pyinotify.WatchManager()
 # IN_MOVED_FROM must be watched to get src_pathname in IN_MOVED_TO.

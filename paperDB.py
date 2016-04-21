@@ -2,23 +2,28 @@
 
 from __future__ import print_function
 
-import sqlite3
+import mysql.connector 
+
 
 # One instance of paperDB deals with one database (as much table
 # as wanted yet).
 class paperDB:
 
-    def __init__(self, db_path, dictionary):
+    def __init__(self, dictionary):
         # Attribute definition
         # Path where are stored papers. (eg Owncloud data path).
         # Maybe useless...
         self.dictionary = dictionary
         # Necessary
         try:
-            self.db_conn = sqlite3.connect(db_path)
+            with open("pass", "r") as f:
+                content_pass = f.readlines()
+            user = content_pass[4].strip('\n')
+            password = content_pass[5].strip('\n')
+            self.db_conn = mysql.connector.connect(host = "localhost", user = user, password = password, database = "papers")
             self.db_cursor = self.db_conn.cursor()
         except Exception as e:
-            print("Error connecting to database. (%s)", e.__class__.__name__)
+            print("Error connecting to database. (%s)" % e.__class__.__name__)
 
     def __get_dictionary_word_str(self):
         return ','.join(self.dictionary)
