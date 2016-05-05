@@ -34,17 +34,17 @@ class paperDB:
     def table_create(self, tab_name):
         print("*** Creating table %s..." % "paper", end = "")
         str_list_dict = ' INTEGER ,'.join(self.dictionary) + " INTEGER"
-        str_list_dict += ', file_name STRING'
-        str_list_dict += ', category STRING'
-        # sql_cmd = "CREATE TABLE IF NOT EXISTS %s (%s)" % (tab_name, str_list_dict)
-        sql_cmd = "CREATE TABLE %s (%s)" % (tab_name, str_list_dict)
+        str_list_dict += ', file_name VARCHAR(60)'
+        str_list_dict += ', category VARCHAR(60)'
+        sql_cmd = "CREATE TABLE IF NOT EXISTS %s (%s)" % (tab_name, str_list_dict)
 
         ret = 0
         try:
             self.db_cursor.execute(sql_cmd)
             self.db_conn.commit()
-        except sqlite3.OperationalError:
-            print("Already exists. Ok.")
+        except mysql.connector.Error as err:
+            print("Error: " + err.msg)
+            ret = -1
         except Exception as e:
             print("Error creating table. (%s)", e.__class__.__name__)
             self.db_conn.rollback()
