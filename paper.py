@@ -177,13 +177,15 @@ class Paper:
             s.quit()
         except smtplib.SMTPException as e:
             print("Error sending email (%s)." % e.__class__.__name__)
+        except Exception as e:
+            print(e.message)
         else:
             print("Ok.")
 
     # Move and rename files at the same time.
     def move_doc(self, paper_path, category, new_paper_name):
         print("*** Moving paper %s..." % paper_path, end = "")
-        
+
         try:
             # TODO if multiple files, create one file containing the whole thing.
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
