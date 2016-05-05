@@ -2,7 +2,7 @@
 
 from __future__ import print_function
 
-import mysql.connector 
+import mysql.connector
 
 
 # One instance of paperDB deals with one database (as much table
@@ -33,26 +33,24 @@ class paperDB:
     # Returns -1 in case of error, 0 otherwise.
     def table_create(self, tab_name):
         print("*** Creating table %s..." % "paper", end = "")
-
         str_list_dict = ' INTEGER ,'.join(self.dictionary) + " INTEGER"
         str_list_dict += ', file_name STRING'
         str_list_dict += ', category STRING'
         # sql_cmd = "CREATE TABLE IF NOT EXISTS %s (%s)" % (tab_name, str_list_dict)
         sql_cmd = "CREATE TABLE %s (%s)" % (tab_name, str_list_dict)
 
+        ret = 0
         try:
             self.db_cursor.execute(sql_cmd)
             self.db_conn.commit()
         except sqlite3.OperationalError:
             print("Already exists. Ok.")
-            ret = 0 
         except Exception as e:
             print("Error creating table. (%s)", e.__class__.__name__)
             self.db_conn.rollback()
             ret = -1
         else:
             print("OK.")
-            ret = 0
         finally:
             return ret
 
@@ -78,7 +76,7 @@ class paperDB:
             print("Error: file entry already exists.")
             return
 
-        
+
         str_list_value = ','.join(str(v) for v in vect)
         sql_cmd = "INSERT INTO %s VALUES (%s, \"%s\", \"%s\")" % (tab_name,
                                                                   str_list_value,
