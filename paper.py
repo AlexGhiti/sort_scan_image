@@ -39,7 +39,7 @@ class EventHandler(pyinotify.ProcessEvent):
             # 1/ Database only if not from unknown (which means it is just after scan
             #    and then it is not in db yet, the "unknown" case is handled by
             #    create inotify hook).
-            if paper.no_use_db:
+            if args.no_use_db:
                 return
 
             if from_category != "unknown":
@@ -174,8 +174,8 @@ class Paper:
             msg_root.attach(mail_jpg)
 
         # Remove the jpg.
-        if self.media_root != "":
-            shutil.move(new_paper_path + ".jpg", os.path.join(self.media_root, to_category))
+        if args.media_root != "":
+            shutil.move(new_paper_path + ".jpg", os.path.join(args.media_root, to_category))
         else:
             os.remove(new_paper_path + ".jpg")
 
@@ -195,7 +195,7 @@ class Paper:
         print("*** Moving paper %s..." % paper_path, end = "")
         
         try:
-            if self.no_use_db:
+            if args.no_use_db:
                 new_paper_name = "test_" + new_paper_name
 
             # TODO if multiple files, create one file containing the whole thing.
@@ -212,7 +212,7 @@ class Paper:
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
         
-        if self.no_use_db:
+        if args.no_use_db:
             return 0
 
         if self.paper_db.table_add_vector("paper", vect_res, ocr_paper_path.split('/')[-1].rstrip(".txt"), category):
@@ -225,7 +225,7 @@ class Paper:
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         new_paper_name = "%s_%s" % (svm_category, int(time.time()))
 
-        if self.no_use_db:
+        if args.no_use_db:
             return (svm_category, new_paper_name)
 
         if self.paper_db.table_add_vector("paper", vect_res, new_paper_name, svm_category):
