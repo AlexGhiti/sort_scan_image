@@ -39,11 +39,15 @@ class EventHandler(pyinotify.ProcessEvent):
             # 1/ Database only if not from unknown (which means it is just after scan
             #    and then it is not in db yet, the "unknown" case is handled by
             #    create inotify hook).
+            if paper.no_use_db:
+                return
+
             if from_category != "unknown":
                 vect_res = paper.paper_db.table_remove_vector("paper",  
                                                 event.src_pathname.split('/')[-1])
                 if vect_res == -1:
                     return
+
                 paper.paper_db.table_add_vector("paper", vect_res,
                                                 event.pathname.split('/')[-1],
                                                 to_category)
@@ -185,6 +189,9 @@ class Paper:
         print("*** Moving paper %s..." % paper_path, end = "")
         
         try:
+            if self.no_use_db:
+                new_paper_name = "test_" + new_paper_name
+
             # TODO if multiple files, create one file containing the whole thing.
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
@@ -198,14 +205,22 @@ class Paper:
     # Returns -1 in case of error, 0 otherwise.
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
+        
+        if self.no_use_db:
+            return 0
+
         if self.paper_db.table_add_vector("paper", vect_res, ocr_paper_path.split('/')[-1].rstrip(".txt"), category):
             return -1
+
         return 0
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         new_paper_name = "%s_%s" % (svm_category, int(time.time()))
+
+        if self.no_use_db:
+            return (svm_category, new_paper_name)
 
         if self.paper_db.table_add_vector("paper", vect_res, new_paper_name, svm_category):
             return (None, None)
@@ -247,6 +262,9 @@ parser.add_argument('--create_db', action='store_true',
 # Use this option to OCRise all paper to use in create_db option.
 parser.add_argument('--create_db_with_ocr', action='store_true',
                     help = 'Create db from raw image (ie. : call ocr).')
+parser.add_argument('--no_use_db', action='store_true',
+                    help = 'Do not add paper to db (allows to test without messing'
+                            'the database).')
 parser.add_argument('--scan_paper_src', default = "/tmp/sort_scan_image/",
                     help = 'With create_db* = true: path where documents are '
                            'already classified.\n'
