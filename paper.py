@@ -39,11 +39,15 @@ class EventHandler(pyinotify.ProcessEvent):
             # 1/ Database only if not from unknown (which means it is just after scan
             #    and then it is not in db yet, the "unknown" case is handled by
             #    create inotify hook).
+            if args.no_use_db:
+                return
+
             if from_category != "unknown":
                 vect_res = paper.paper_db.table_remove_vector("paper",  
                                                 event.src_pathname.split('/')[-1])
                 if vect_res == -1:
                     return
+
                 paper.paper_db.table_add_vector("paper", vect_res,
                                                 event.pathname.split('/')[-1],
                                                 to_category)
@@ -152,7 +156,10 @@ class Paper:
         msg_root.attach(MIMEText(html, 'html'))
 
         # 2/ Send the paper in the mail.
-        # Convert the pnm to jpg (and maybe shrink to save space).
+        # Convert the pnm to jpg (and maybe shrink to save space)
+        # and if media_root option is defined, save it there.
+        # paper_site uses pynotify too to add the jpg to photologue
+        # database.
         # Moved paper path.
         ret = subprocess.call(["convert", new_paper_path,
                                         "-resize", "20%",
@@ -167,7 +174,10 @@ class Paper:
             msg_root.attach(mail_jpg)
 
         # Remove the jpg.
-        os.remove(new_paper_path + ".jpg")
+        if args.media_root != "":
+            shutil.move(new_paper_path + ".jpg", os.path.join(args.media_root, to_category))
+        else:
+            os.remove(new_paper_path + ".jpg")
 
         # 3/ Effectively send the mail.
         try:
@@ -187,6 +197,9 @@ class Paper:
         print("*** Moving paper %s..." % paper_path, end = "")
 
         try:
+            if args.no_use_db:
+                new_paper_name = "test_" + new_paper_name
+
             # TODO if multiple files, create one file containing the whole thing.
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
@@ -200,14 +213,22 @@ class Paper:
     # Returns -1 in case of error, 0 otherwise.
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
+        
+        if args.no_use_db:
+            return 0
+
         if self.paper_db.table_add_vector("paper", vect_res, ocr_paper_path.split('/')[-1].rstrip(".txt"), category):
             return -1
+
         return 0
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         new_paper_name = "%s_%s" % (svm_category, int(time.time()))
+
+        if args.no_use_db:
+            return (svm_category, new_paper_name)
 
         if self.paper_db.table_add_vector("paper", vect_res, new_paper_name, svm_category):
             return (None, None)
@@ -249,6 +270,9 @@ parser.add_argument('--create_db', action='store_true',
 # Use this option to OCRise all paper to use in create_db option.
 parser.add_argument('--create_db_with_ocr', action='store_true',
                     help = 'Create db from raw image (ie. : call ocr).')
+parser.add_argument('--no_use_db', action='store_true',
+                    help = 'Do not add paper to db (allows to test without messing'
+                            'the database).')
 parser.add_argument('--scan_paper_src', default = "/tmp/sort_scan_image/",
                     help = 'With create_db* = true: path where documents are '
                            'already classified.\n'
@@ -258,6 +282,9 @@ parser.add_argument('--scan_paper_dest', default = "",
                     help = 'Only used with create_db* = false: root path (local '
                             'or remote) where classified papers must be sent '
                             '(Your server for example).')
+parser.add_argument('--media_root', default = "",
+                    help = 'Only used with paper_site frontend which uses'
+                            'photologue.')
 parser.add_argument('--dict', default = "dictionary",
                     help = 'Dictionary filename to use to classify.')
 
