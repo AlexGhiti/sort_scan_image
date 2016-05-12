@@ -156,7 +156,10 @@ class Paper:
         msg_root.attach(MIMEText(html, 'html'))
 
         # 2/ Send the paper in the mail.
-        # Convert the pnm to jpg (and maybe shrink to save space).
+        # Convert the pnm to jpg (and maybe shrink to save space)
+        # and if media_root option is defined, save it there.
+        # paper_site uses pynotify too to add the jpg to photologue
+        # database.
         # Moved paper path.
         ret = subprocess.call(["convert", new_paper_path,
                                         "-resize", "20%",
@@ -171,7 +174,10 @@ class Paper:
             msg_root.attach(mail_jpg)
 
         # Remove the jpg.
-        os.remove(new_paper_path + ".jpg")
+        if self.media_root != "":
+            shutil.move(new_paper_path + ".jpg", os.path.join(self.media_root, to_category))
+        else:
+            os.remove(new_paper_path + ".jpg")
 
         # 3/ Effectively send the mail.
         try:
@@ -274,6 +280,9 @@ parser.add_argument('--scan_paper_dest', default = "",
                     help = 'Only used with create_db* = false: root path (local '
                             'or remote) where classified papers must be sent '
                             '(Your server for example).')
+parser.add_argument('--media_root', default = "",
+                    help = 'Only used with paper_site frontend which uses'
+                            'photologue.')
 parser.add_argument('--dict', default = "dictionary",
                     help = 'Dictionary filename to use to classify.')
 
