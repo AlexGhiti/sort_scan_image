@@ -309,13 +309,11 @@ elif args.create_db_with_ocr:
     paper.create_db(ocr = True)
 else:
     # Main use: as a daemon which waits for new file
-    # to classify. (TODO implement inotify rather than
-    # loop...). Use 'supervisor' to deal with boot start..etc.
+    # to classify.
     # Here we start by teaching svm, and then we loop forever.
     paper.teach_svm()
     handler = EventHandler()
     notifier = pyinotify.Notifier(wm, handler)
-    # wdd = wm.add_watch(os.path.join(args.scan_paper_src, "unknown"), mask, rec = True)
     wdd = wm.add_watch(args.scan_paper_src, mask, rec = True)
 
     notifier.loop()
