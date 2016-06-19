@@ -9,7 +9,7 @@ import shutil
 import argparse
 from unidecode import unidecode
 import pyinotify
-import time
+import datetime
 
 import smtplib
 from email.mime.text import MIMEText
@@ -194,7 +194,6 @@ class Paper:
             if args.no_use_db:
                 new_paper_name = "test_" + new_paper_name
 
-            # TODO if multiple files, create one file containing the whole thing.
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
         except Exception:
@@ -202,24 +201,33 @@ class Paper:
         else:
             print("Ok.")
     
+    def __format_time(self):
+      return datetime.datetime.now().strftime('%d%m%Y-%H:%M:%S')
+
     # TODO this is not the right place for those functions;
     # Do 'cleanup' on ocr text and adds the result to db.
-    # Returns -1 in case of error, 0 otherwise.
+    # Returns None in case of error, new_paper_name otherwise.
     def add_to_db_with_category(self, ocr_paper_path, category):
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
+        # Rename the file to remain consistent
+        new_paper_name = "%s_%s" % (category, self.__format_time())
         
         if args.no_use_db:
-            return 0
+            return new_paper_name
 
-        if self.paper_db.table_add_vector("paper", vect_res, ocr_paper_path.split('/')[-1].rstrip(".txt"), category):
-            return -1
+        if self.paper_db.table_add_vector("paper", vect_res, new_paper_name, category):
+            return None
 
-        return 0
+        # TODO Pass paper_path rather than ocr_paper_path, it is not normal
+        # to add .txt in the call and remove it here. NOT PRETTY AT ALL.
+        self.move_doc(ocr_paper_path.rsplit(".txt"), category, new_paper_name)
+
+        return new_paper_name
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
-        new_paper_name = "%s_%s" % (svm_category, int(time.time()))
+        new_paper_name = "%s_%s" % (svm_category, self.__format_time())
 
         if args.no_use_db:
             return (svm_category, new_paper_name)
@@ -240,9 +248,9 @@ class Paper:
         for p in paper_list:
             if ocr:
                 self.ocr(p)
-
-            self.add_to_db_with_category(p + ".txt",
-                                        p.split('/')[-2])
+            
+            category = p.split('/')[-2]
+            new_paper_name = self.add_to_db_with_category(p + ".txt", category)
 
     # TODO Reteach after all modifs in db (especially when a 
     # new paper has been classified with classification from the user !
