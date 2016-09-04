@@ -31,7 +31,7 @@ class EventHandler(pyinotify.ProcessEvent):
 
     def process_IN_MOVED_TO(self, event):
         # Do something only when moving papers images.
-        if re.match(".*_[0-9]*$", event.pathname):
+        if re.match(".*_[0-9]*-[0-9]*$", event.pathname):
             from_category = event.src_pathname.split('/')[-2]
             to_category = event.pathname.split('/')[-2]
             paper.send_mail_result(from_category, to_category, event.pathname)
@@ -91,7 +91,7 @@ class Paper:
         paper_list = []
         for root, directories, filenames in os.walk(self.scan_paper_src):
             if not "unknown" in root:
-                paper_list.extend([os.path.join(root, f) for f in filenames if re.match(".*_[0-9]+$", f) and not "txt" in f ])
+                paper_list.extend([os.path.join(root, f) for f in filenames if f != "dictionary" and not "txt" in f ])
 
         return paper_list
     
@@ -193,16 +193,16 @@ class Paper:
         try:
             if args.no_use_db:
                 new_paper_name = "test_" + new_paper_name
-
+ 
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
-        except Exception:
-            print("Error moving paper (%s)." % e.__class__.__name__)
+        except Exception as e:
+          print("Error moving paper (%s: %s)." % (e.__class__.__name__, e.message))
         else:
             print("Ok.")
     
     def __format_time(self):
-      return datetime.datetime.now().strftime('%d%m%Y-%H:%M:%S')
+      return datetime.datetime.now().strftime('%d%m%Y-%H%M%S')
 
     # TODO this is not the right place for those functions;
     # Do 'cleanup' on ocr text and adds the result to db.
@@ -220,7 +220,7 @@ class Paper:
 
         # TODO Pass paper_path rather than ocr_paper_path, it is not normal
         # to add .txt in the call and remove it here. NOT PRETTY AT ALL.
-        self.move_doc(ocr_paper_path.rsplit(".txt"), category, new_paper_name)
+        self.move_doc(ocr_paper_path.rsplit(".txt")[0], category, new_paper_name)
 
         return new_paper_name
 
