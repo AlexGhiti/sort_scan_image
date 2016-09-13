@@ -28,6 +28,7 @@ class EventHandler(pyinotify.ProcessEvent):
             if (category, new_paper_name) == (None, None):
                 return
             paper.move_doc(event.pathname, category, new_paper_name)
+            paper.teach_svm()
 
     def process_IN_MOVED_TO(self, event):
         # Do something only when moving papers images.
@@ -53,6 +54,7 @@ class EventHandler(pyinotify.ProcessEvent):
                                                 to_category)
 
             # 2/ SVM in any case. TODO
+            paper.teach_svm()
 
 class Paper:
     # scan_paper_dest may be an url or a local dest.
