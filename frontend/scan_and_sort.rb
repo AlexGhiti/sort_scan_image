@@ -13,19 +13,17 @@ options.verbose = false
 parser = OptionParser.new
 parser.banner = "Usage: frontend [options] []"
 parser.on("-h", "--help", "Prints this help") {|val| options["help"] = true}
-parser.on("-s", "--scan", "Scan doc.") {|val| options["scan"] = true}
+parser.on("--scan nb", Integer, "Scan doc.") { |val| options[:scan] = val }
 parser.on("--move cur_category,new_category,filename", Array, "Move doc.") {|val| options[:move] = val}
 
 parser.parse(*ARGV)
 
-print(options)
-
 $path_papers = "/home/aghiti/wip/sort_scan_image/papers/unknown/"
-$cur_nb_sheet_doc = 1 
-$cur_num_sheet_doc = 0 
+$nb_sheet_paper = 1 
+$num_sheet_paper = 0 
 
 def search_scanner()
-	return "plustek:libusb:002:006"
+	return "plustek:libusb:002:009"
 end
 
 # Get the number of scanned doc not already treated.
@@ -41,17 +39,16 @@ def get_nb_scanned_doc(path)
 	return nb_scanned_doc
 end
 
-def scan_doc()
-	# Get the next available filename.
-	nb_doc = get_nb_scanned_doc("/tmp")
+def scan_doc(nb_doc)
+	puts "frontend: scanning..."
 
 	# TODO Multipage document.
 	# If this is the first page of the document, create a new number of 
 	# document. Otherwise, take the same and suffix a, b, c...etc. 
 	# TODO more than just one letter for big documents.
-	cur_num_doc = nb_doc.to_s + ('a'.ord + $cur_num_sheet_doc).chr
+	cur_num_doc = nb_doc.to_s + ('a'.ord + $num_sheet_paper).chr
 	scan_options = "-d #{search_scanner()} --res 300 --format pnm -x 215 -y 297 --warmup-time 1"
-	print("frontend: scanimage #{scan_options} > /tmp/scan_and_sort#{cur_num_doc}.tmp")
+	print("scanimage #{scan_options} > /tmp/scan_and_sort#{cur_num_doc}.tmp")
 	ret = `scanimage #{scan_options} > /tmp/scan_and_sort#{cur_num_doc}.tmp`
 	ret_value = `echo $?`.tr("\n", "")
 	
@@ -59,8 +56,10 @@ def scan_doc()
 		print("frontend: Scan failed #{ret_value}.")
 	end
 
+	puts "frontend: scan ok."
+
 	return nb_doc
-end	
+end
 
 # For the moment, a filename is "category_timestamp"
 # get '/sample/move/:cur_category/:right_category/:filename' do
@@ -78,26 +77,25 @@ end
 # post '/sample/document/:action' do
 # 	puts "COUCOU IN?"
 # 	if params['action'] == "increment" then
-# 		$cur_nb_sheet_doc += 1
+# 		$nb_sheet_paper += 1
 # 	else
-# 		if ($cur_nb_sheet_doc > 1) then
-# 			$cur_nb_sheet_doc -= 1
+# 		if ($nb_sheet_paper > 1) then
+# 			$nb_sheet_paper -= 1
 # 		end
 # 	end
 # 	
 # 	update_nb_sheet()
 # 	# Must return a different value than one by send_event, otherwise
 # 	# we got an error 500 at client side.
-# 	"OK"
 # end
 
 def validate_scan()
-	$cur_num_sheet_doc += 1
+	$num_sheet_paper += 1
 
 	# If we finished the document, then merge the pages into one and send it to ocr.
-	if ($cur_nb_sheet_doc == $cur_num_sheet_doc) then
+	if ($nb_sheet_paper == $num_sheet_paper) then
 		nb_doc = get_nb_scanned_doc("/tmp") - 1 
-		if ($cur_nb_sheet_doc > 1) then
+		if ($nb_sheet_paper > 1) then
 			cv_str = "convert "
 			cv_str += `ls /tmp/scan_and_sort#{nb_doc}*.tmp`.gsub("\n", " ")
 			cv_str += " -append #{$path_papers}/scan_and_sort#{nb_doc}.tmp"
@@ -105,10 +103,7 @@ def validate_scan()
 		else
 			ret = `cp /tmp/scan_and_sort#{nb_doc}a.tmp #{$path_papers}/scan_and_sort#{nb_doc}.tmp`
 		end	
-		$cur_nb_sheet_doc = 1
-		$cur_num_sheet_doc = 0
 	end
-	"OK"
 end
 
 if (options["help"]) then
@@ -117,22 +112,23 @@ if (options["help"]) then
 	exit true
 end
 
-print(options["move"])
-
-if (options["scan"]) then
-	scan_doc()
-	nb_doc = get_nb_scanned_doc("/tmp") - 1 
-	ret = `eog /tmp/scan_and_sort#{nb_doc}a.tmp` 
-	print("frontend: Is the scan ok ? (Y/n)")
-	answer = STDIN.gets.chomp()
-	if (answer == "" or answer.downcase() == "y") then
-		validate_scan()
-	else
-		ret = `rm /tmp/scan_and_sort#{nb_doc}`
-	end
+if (options["scan"] >= 1) then
+	$nb_sheet_paper = options["scan"].to_i
+	$num_sheet_paper = 0
+	nb_doc = get_nb_scanned_doc("/tmp")
+	while ($num_sheet_paper < $nb_sheet_paper)
+		scan_doc(nb_doc)
+		ret = `eog /tmp/scan_and_sort#{nb_doc}#{('a'.ord + $num_sheet_paper).chr}.tmp`
+		print("frontend: Is the scan ok ? (Y/n)")
+		answer = STDIN.gets.chomp()
+		if (answer == "" or answer.downcase() == "y") then
+			validate_scan()
+		else
+			ret = `rm /tmp/scan_and_sort#{nb_doc}*`
+			break
+		end
+	end	
 elsif (options["move"]) then
 	print("frontend: Move")
 	move_paper(options["move"][0], options["move"][1], options["move"][2])
 end
-
-
