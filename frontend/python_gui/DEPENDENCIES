@@ -1,0 +1,34 @@
+Python:
+^^^^^^
+pyinotify
+argparse
+GitPython
+kivy
+PIL (to download and install)
+
+Host:
+^^^^
+Fedora/Centos: libgit2-devel, pygame 
+kivy dependencies: https://kivy.org/docs/installation/installation-linux.html:
+
+sudo yum install \
+>     make \
+>     mercurial \
+>     automake \
+>     gcc \
+>     gcc-c++ \
+>     SDL_ttf-devel \
+>     SDL_mixer-devel \
+>     khrplatform-devel \
+>     mesa-libGLES \
+>     mesa-libGLES-devel \
+>     gstreamer-plugins-good \
+>     gstreamer \
+>     gstreamer-python \
+>     mtdev-devel \
+>     python-devel \
+>     python-pip \
+>     xclip
+
+Kivy must be compiled with SDL2, so install SDL2* libraries, and reinstall kivy with pip.
+I also removed pygame and SDL libraries to make sure.
