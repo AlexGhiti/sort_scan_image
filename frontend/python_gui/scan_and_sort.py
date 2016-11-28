@@ -41,21 +41,12 @@ class PaperScanAndSort(EventDispatcher):
 	nb_page = NumericProperty(1)
 	num_page = NumericProperty(0)	        # For display
 	num_page_scanned = NumericProperty(0)   # For counting :)
-	str_btn_accept = StringProperty('')
-	str_lbl_error = StringProperty('')
-	# Attributes linked to a GUI object.
-	#str_lbl_nb_num_page = '' 
+	str_error = StringProperty('')
 
 	def __init__(self, *args, **kwargs):
 		super(PaperScanAndSort, self).__init__(*args, **kwargs)
-		# Retrieve App object to deal with auto-refreshing of
-		# GUI objects. TODO ask if this the right way to do ?
-		self.app = kwargs["app"]
-		# TODO Add a label for the path
-		self.str_lbl_nb_num_page = "%d / %d" % (self.num_page, self.nb_page)
-		self.str_btn_accept = "Scan"
-		self.str_lbl_error = "No error"
-		
+		self.str_error = "No error"
+		# TODO ; should be external functions
 		self.bind(nb_page = self.update_lbl_nb_num_page)
 		self.bind(num_page = self.update_num_page)
 		self.bind(num_page_scanned = self.update_num_page_scanned)
@@ -63,7 +54,6 @@ class PaperScanAndSort(EventDispatcher):
 		self.bind(str_lbl_error = self.update_lbl_error)
 
 	# Attributes setters/getters
-
     # nb_page can be inc/dec while scanning paper,
     # but we need to take care that it is higher than
     # the number of scanned_page (TODO or discard all
@@ -88,29 +78,34 @@ class PaperScanAndSort(EventDispatcher):
                                
 	def num_page_clear(instance, value):
 		instance.num_page = 0
-		instance.str_btn_accept = "Scan"
+		# TODO external
+		# instance.str_btn_accept = "Scan"
 
 	def num_page_scanned_inc(instance, value):
 		if (instance.num_page_scanned < instance.nb_page):
 			instance.num_page_scanned += 1
-			instance.update_str_btn_accept(value)
+			# TODO external ?
+			# instance.update_str_btn_accept(value)
 
 	def num_page_scanned_dec(instance, value):
 		if (instance.num_page_scanned >= 1):
 			instance.num_page_scanned -= 1
-			instance.update_str_btn_accept(value)
+			# TODO external ?
+			# instance.update_str_btn_accept(value)
 
 	def num_page_scanned_clear(instance, value):
 		instance.num_page_scanned = 0
-		instance.update_str_btn_accept(value)
+		# TODO external 
+		# instance.update_str_btn_accept(value)
 
-	def update_str_btn_accept(instance, value):
-		if (instance.num_page_scanned == 0):
-			instance.str_btn_accept = "Scan"
-		elif (instance.num_page_scanned < instance.nb_page):
-			instance.str_btn_accept = "OK, scan next"
-		elif (instance.num_page_scanned == instance.nb_page):
-			instance.str_btn_accept = "OK !"
+ 	# TODO external
+	#def update_str_btn_accept(instance, value):
+	#	if (instance.num_page_scanned == 0):
+	#		instance.str_btn_accept = "Scan"
+	#	elif (instance.num_page_scanned < instance.nb_page):
+	#		instance.str_btn_accept = "OK, scan next"
+	#	elif (instance.num_page_scanned == instance.nb_page):
+	#		instance.str_btn_accept = "OK !"
 
 	def new_paper(instance, value):
         # TODO Stop thread that scans.
@@ -151,9 +146,9 @@ class PaperScanAndSort(EventDispatcher):
 		
 		return max_number
 
-	def print_activity(self, str_error):
-		print(str_error)
-		self.str_lbl_error = str_error
+	# TODO external => at least, should 'send' that back to calling class
+	def print_activity(self, str_activity):
+		print(str_activity)
 
 	def scan(self):
         # TODO does not show because this thread blocks the main thread...
@@ -221,6 +216,7 @@ class PaperScanAndSort(EventDispatcher):
 		
 	# ObjectProperty callbacks.
 	# self == instance (normally)
+	# TODO COMPLETELY EXTERNAL
 	def update_lbl_nb_num_page(self, instance, value):
 		instance.str_lbl_nb_num_page = "%d / %d" % (instance.num_page, instance.nb_page)
 		instance.app.lbl_nb_num_page.text = instance.str_lbl_nb_num_page
@@ -254,7 +250,8 @@ class ScanAndSortApp(App):
 		kivy_app.stop()
 
 	def build(self):
-		self.paper = PaperScanAndSort(app = self)
+		# TODO give external callbacks.
+		self.paper = PaperScanAndSort()
 
 		# Left side.
 		left_layout = BoxLayout(orientation = 'vertical', size_hint = (.1, 1))
