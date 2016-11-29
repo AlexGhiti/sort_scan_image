@@ -22,13 +22,6 @@ from kivy.lang import Builder
 from kivy.event import EventDispatcher
 from kivy.properties import NumericProperty, StringProperty
 
-class ThreadScan(Thread):
-	def __init__(self, paper):
-		Thread.__init__(self)
-		self.paper = paper
-
-	def run(self):
-		self.paper.scan_top(0)
 
 class PaperScanAndSort(EventDispatcher):
 	# Path where frontend must copy final image for backend to sort it.
@@ -41,17 +34,15 @@ class PaperScanAndSort(EventDispatcher):
 	nb_page = NumericProperty(1)
 	num_page = NumericProperty(0)	        # For display
 	num_page_scanned = NumericProperty(0)   # For counting :)
-	str_error = StringProperty('')
+	str_activity = StringProperty("No error")
 
 	def __init__(self, *args, **kwargs):
 		super(PaperScanAndSort, self).__init__(*args, **kwargs)
-		self.str_error = "No error"
-		# TODO ; should be external functions
-		self.bind(nb_page = self.update_lbl_nb_num_page)
-		self.bind(num_page = self.update_num_page)
-		self.bind(num_page_scanned = self.update_num_page_scanned)
-		self.bind(str_btn_accept = self.update_btn_accept)
-		self.bind(str_lbl_error = self.update_lbl_error)
+		self.th_scan = None
+		self.bind(nb_page = kwargs["update_nb_page"])
+		self.bind(num_page = kwargs["update_num_page"])
+		self.bind(num_page_scanned = kwargs["update_num_page_scanned"])
+		self.bind(str_activity = kwargs["update_activity"])
 
 	# Attributes setters/getters
     # nb_page can be inc/dec while scanning paper,
@@ -78,36 +69,19 @@ class PaperScanAndSort(EventDispatcher):
                                
 	def num_page_clear(instance, value):
 		instance.num_page = 0
-		# TODO external
-		# instance.str_btn_accept = "Scan"
 
 	def num_page_scanned_inc(instance, value):
 		if (instance.num_page_scanned < instance.nb_page):
 			instance.num_page_scanned += 1
-			# TODO external ?
-			# instance.update_str_btn_accept(value)
 
 	def num_page_scanned_dec(instance, value):
 		if (instance.num_page_scanned >= 1):
 			instance.num_page_scanned -= 1
-			# TODO external ?
-			# instance.update_str_btn_accept(value)
 
 	def num_page_scanned_clear(instance, value):
 		instance.num_page_scanned = 0
-		# TODO external 
-		# instance.update_str_btn_accept(value)
 
- 	# TODO external
-	#def update_str_btn_accept(instance, value):
-	#	if (instance.num_page_scanned == 0):
-	#		instance.str_btn_accept = "Scan"
-	#	elif (instance.num_page_scanned < instance.nb_page):
-	#		instance.str_btn_accept = "OK, scan next"
-	#	elif (instance.num_page_scanned == instance.nb_page):
-	#		instance.str_btn_accept = "OK !"
-
-	def new_paper(instance, value):
+ 	def new_paper(instance, value):
         # TODO Stop thread that scans.
         #instance.th_scan.stop()
 		# Clear attributes
@@ -146,22 +120,19 @@ class PaperScanAndSort(EventDispatcher):
 		
 		return max_number
 
-	# TODO external => at least, should 'send' that back to calling class
-	def print_activity(self, str_activity):
-		print(str_activity)
+	def print_activity(self, stra):
+		self.str_activity = stra
 
 	def scan(self):
-        # TODO does not show because this thread blocks the main thread...
 		self.print_activity("Scanning page %d..." % (self.num_page + 1))
-		# Open file that will hold this page
-		# Not pretty the + 1...but I have no choice, can't update img source
-		# before scanning the page...
+
 		pnm = os.path.join(self.path_page_paper, "%d.pnm" % (self.num_page + 1))
 		with open(pnm, "w") as f:
+			# Effective scan.
 			cmd = "scanimage -d %s --res 300 --format pnm -x 215 -y 297 --warmup-time 1" % self.search_scanner()
 			res = subprocess.call(cmd.split(" "), stdout = f)
 			if (res != 0):
-				self.print_activity("\"%s\" failed.\n" % ' '.join(cmd))
+				self.print_activity("\"%s\" failed.\n" % cmd)
 				return 1
 
 			# Convert to jpg, way faster to display.
@@ -171,6 +142,8 @@ class PaperScanAndSort(EventDispatcher):
 			if ret:
 				self.print_activity("[FAIL %d] %s" % (ret, cmd))
 				return 1
+
+			# Scan success.
 			self.print_activity("Scanned page %d." % (self.num_page + 1))
 			self.num_page_scanned_inc(0)
 		        
@@ -190,58 +163,28 @@ class PaperScanAndSort(EventDispatcher):
                                                     os.path.join(instance.path_paper, "scan_and_sort%d.tmp" % nb_paper_to_sort))
 				ret = subprocess.call(cmd.split(" "))
 				if (ret):
-					instance.print_activity("[FAIL %d] %s.\n" % cmd)
+					instance.print_activity("[FAIL %d] %s.\n" % (ret, cmd))
 			else:
 				cmd = "convert "
-				for i in range(1, instance.nb_page):
+				for i in range(1, instance.nb_page + 1):
 					cmd += os.path.join(instance.path_page_paper, "%d.pnm " % i)
 				cmd += "-append %s" % os.path.join(instance.path_paper, "scan_and_sort%d.tmp" % nb_paper_to_sort)
 				ret = subprocess.call(cmd.split(" "))
                 if (ret):
-                	instance.print_activity("[FAIL %d] %s.\n" % cmd)
+                	instance.print_activity("[FAIL %d] %s.\n" % (ret, cmd))
 
             # New paper
 			instance.new_paper(value)
 
 	def launch_scan(instance, value):
-		# TODO Thread is totally useless, must find a way
-		# to display image with this thread working (would
-		# be perfect to display gradually the image while scanning..).
+		# Wait for scan thread to finish before launching another one.
+		if (instance.th_scan != None):
+			instance.th_scan.join()
+
 		# Create thread that handles scan/convert
-		instance.th_scan = ThreadScan(instance)
+		instance.th_scan = Thread(instance.scan_top(value))#ThreadScan(instance)
 		instance.th_scan.start()
-		# TODO Where can I handle join ?!
-		instance.th_scan.join()
-		instance.app.img_page.reload()
 		
-	# ObjectProperty callbacks.
-	# self == instance (normally)
-	# TODO COMPLETELY EXTERNAL
-	def update_lbl_nb_num_page(self, instance, value):
-		instance.str_lbl_nb_num_page = "%d / %d" % (instance.num_page, instance.nb_page)
-		instance.app.lbl_nb_num_page.text = instance.str_lbl_nb_num_page
-
-	def update_num_page(self, instance, value):
-		self.update_lbl_nb_num_page(instance, value)
-		if (instance.num_page):
-			instance.app.img_page.source = os.path.join(instance.path_page_paper, "%d.jpg" % instance.num_page)
-		else:
-			instance.app.img_page.source = ""
-		instance.app.img_page.reload()
-	
- 	def update_num_page_scanned(self, instance, value):
-		if (instance.num_page_scanned):
-			instance.app.img_page.source = os.path.join(instance.path_page_paper, "%d.jpg" % instance.num_page_scanned)
-		else:
-			instance.app.img_page.source = ""
-		instance.app.img_page.reload()
-
-	def update_btn_accept(self, instance, value):
-		instance.app.btn_accept.text = instance.str_btn_accept
-        
-	def update_lbl_error(self, instance, value):
-		instance.app.lbl_error.text = instance.str_lbl_error
-
 
 class ScanAndSortApp(App):
 	window_layout = None
@@ -251,7 +194,10 @@ class ScanAndSortApp(App):
 
 	def build(self):
 		# TODO give external callbacks.
-		self.paper = PaperScanAndSort()
+		self.paper = PaperScanAndSort(	update_num_page = self.update_num_page,
+										update_num_page_scanned = self.update_num_page_scanned,
+										update_nb_page = self.update_nb_page,
+										update_activity = self.update_activity)
 
 		# Left side.
 		left_layout = BoxLayout(orientation = 'vertical', size_hint = (.1, 1))
@@ -265,9 +211,9 @@ class ScanAndSortApp(App):
 		# Middle.
 		middle_layout = BoxLayout(orientation = 'vertical', size_hint = (.7, 1))
 		self.img_page = Image(source = "", size_hint = (1, .95))
-		self.lbl_error = Label(text = "No errors", size_hint = (1, .05))
+		self.lbl_activity = Label(text = "", size_hint = (1, .05))
 		middle_layout.add_widget(self.img_page)
-		middle_layout.add_widget(self.lbl_error)
+		middle_layout.add_widget(self.lbl_activity)
 
 		# Right side.
 		right_layout = BoxLayout(orientation = 'vertical', size_hint = (.2, 1))
@@ -275,7 +221,7 @@ class ScanAndSortApp(App):
 		btn_plus.bind(on_press = self.paper.nb_page_inc)
 		btn_minus = Button(text = "-", font_size = '25sp')
 		btn_minus.bind(on_press = self.paper.nb_page_dec)
-		self.lbl_nb_num_page = Label(text = self.paper.str_lbl_nb_num_page, font_size = '25sp')
+		self.lbl_nb_num_page = Label(text = "0 / 1", font_size = '25sp')
 		self.btn_accept = Button(text = "Scan", font_size = '25sp')
 		self.btn_accept.bind(on_press = self.paper.launch_scan)
 		self.btn_cancel_page = Button(text = "Rescan page", font_size = '25sp')
@@ -297,6 +243,48 @@ class ScanAndSortApp(App):
 
 		Window.bind(on_close = self.exit_app)
 		return self.window_layout
+	
+	# Helpers for callbacks.
+	def update_str_btn_accept(self, instance, value):
+		if (instance.num_page_scanned == 0):
+			self.btn_accept.text = "Scan"
+		elif (instance.num_page_scanned < instance.nb_page):
+			self.btn_accept.text = "OK, scan next"
+		elif (instance.num_page_scanned == instance.nb_page):
+			self.btn_accept.text = "OK !"
+
+	def update_lbl_nb_num_page(self, instance, value):
+		self.lbl_nb_num_page.text = "%d / %d" % (instance.num_page, instance.nb_page)
+
+	# Callbacks from PaperScanAndSort 
+	def update_nb_page(self, instance, value):
+		# Update label
+		self.update_lbl_nb_num_page(instance, value)
+
+	def update_num_page(self, instance, value):
+		# Update label
+		self.update_lbl_nb_num_page(instance, value)
+		# Update image
+		if (instance.num_page):
+			self.img_page.source = os.path.join(instance.path_page_paper, "%d.jpg" % instance.num_page)
+		else:
+			self.img_page.source = ""
+		self.img_page.reload()
+	
+ 	def update_num_page_scanned(self, instance, value):
+		# Update image
+		if (instance.num_page_scanned):
+			self.img_page.source = os.path.join(instance.path_page_paper, "%d.jpg" % instance.num_page_scanned)
+		else:
+			self.img_page.source = ""
+		self.img_page.reload()
+		# Update button
+		self.update_str_btn_accept(instance, value)
+
+	def update_activity(self, instance, value):
+		# Update label activity 
+		self.lbl_activity.text = instance.str_activity
+		print(instance.str_activity)
 
 
 if __name__ == "__main__":
