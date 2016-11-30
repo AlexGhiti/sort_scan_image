@@ -21,6 +21,7 @@ from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.event import EventDispatcher
 from kivy.properties import NumericProperty, StringProperty
+from kivy.clock import Clock, mainthread
 
 
 class PaperScanAndSort(EventDispatcher):
@@ -30,25 +31,59 @@ class PaperScanAndSort(EventDispatcher):
 	# Path where each individual page will be stored before being merged
 	# into one paper copied in path_paper.
 	path_page_paper = "/tmp/papers/"
-	# ObjectProperty
-	nb_page = NumericProperty(1)
-	num_page = NumericProperty(0)	        # For display
-	num_page_scanned = NumericProperty(0)   # For counting :)
-	str_activity = StringProperty("No error")
 
 	def __init__(self, *args, **kwargs):
 		super(PaperScanAndSort, self).__init__(*args, **kwargs)
+		# WARNING ! obj attribute definition must be before the first
+		# attribute defined as property, otherwise it does not work !
+		self.obj = kwargs["obj"]
 		self.th_scan = None
-		self.bind(nb_page = kwargs["update_nb_page"])
-		self.bind(num_page = kwargs["update_num_page"])
-		self.bind(num_page_scanned = kwargs["update_num_page_scanned"])
-		self.bind(str_activity = kwargs["update_activity"])
+		self._num_page = 0 
+		self._nb_page = 1 
+		self._num_page_scanned = 0
+		self._activity = "No error"
+
+        @property
+	def nb_page(self):
+		return self._nb_page
+        
+        @nb_page.setter
+	def nb_page(self, value):
+		self._nb_page = value
+		self.obj.update_nb_page(self, value)
+        
+        @property	
+        def num_page(self):
+		return self._num_page
+
+        @num_page.setter
+	def num_page(self, value):
+		self._num_page = value
+		self.obj.update_num_page(self, value)
+	
+        @property	
+        def num_page_scanned(self):
+		return self._num_page_scanned
+
+        @num_page_scanned.setter
+	def num_page_scanned(self, value):
+		self._num_page_scanned = value
+		self.obj.update_num_page_scanned(self, value)
+        
+        @property	
+        def activity(self):
+		return self._activity
+
+        @activity.setter
+	def activity(self, value):
+		self._activity = value
+		self.obj.update_activity(self, value)
 
 	# Attributes setters/getters
-    # nb_page can be inc/dec while scanning paper,
-    # but we need to take care that it is higher than
-    # the number of scanned_page (TODO or discard all
-    # the pages that are higher...).
+        # nb_page can be inc/dec while scanning paper,
+        # but we need to take care that it is higher than
+        # the number of scanned_page (TODO or discard all
+        # the pages that are higher...).
 	def nb_page_inc(instance, value):
 		instance.nb_page += 1
 
@@ -82,8 +117,8 @@ class PaperScanAndSort(EventDispatcher):
 		instance.num_page_scanned = 0
 
  	def new_paper(instance, value):
-        # TODO Stop thread that scans.
-        #instance.th_scan.stop()
+                # TODO Stop thread that scans.
+                #instance.th_scan.stop()
 		# Clear attributes
 		instance.num_page_clear(value)
 		instance.num_page_scanned_clear(value)
@@ -121,11 +156,10 @@ class PaperScanAndSort(EventDispatcher):
 		return max_number
 
 	def print_activity(self, stra):
-		self.str_activity = stra
+		self.activity = stra
 
 	def scan(self):
 		self.print_activity("Scanning page %d..." % (self.num_page + 1))
-
 		pnm = os.path.join(self.path_page_paper, "%d.pnm" % (self.num_page + 1))
 		with open(pnm, "w") as f:
 			# Effective scan.
@@ -193,11 +227,7 @@ class ScanAndSortApp(App):
 		kivy_app.stop()
 
 	def build(self):
-		# TODO give external callbacks.
-		self.paper = PaperScanAndSort(	update_num_page = self.update_num_page,
-										update_num_page_scanned = self.update_num_page_scanned,
-										update_nb_page = self.update_nb_page,
-										update_activity = self.update_activity)
+		self.paper = PaperScanAndSort(obj = self)
 
 		# Left side.
 		left_layout = BoxLayout(orientation = 'vertical', size_hint = (.1, 1))
