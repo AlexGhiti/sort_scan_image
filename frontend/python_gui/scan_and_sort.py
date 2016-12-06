@@ -5,6 +5,7 @@ import re
 import subprocess
 import time
 import re
+import argparse
 from threading import Thread
 os.environ['KIVY_TEXT'] = 'pil'
 from kivy.config import Config
@@ -27,7 +28,7 @@ from kivy.clock import Clock, mainthread
 class PaperScanAndSort(EventDispatcher):
 	# Path where frontend must copy final image for backend to sort it.
 	#path_paper = "/nfs/home/aghiti/Projects/sort_scan_image/papers/unknown"
-	path_paper = "/home/pi/sort_scan_image/papers/unknown"
+	path_paper = "/home/pi/sort_scan_image/papers/"
 	# Path where each individual page will be stored before being merged
 	# into one paper copied in path_paper.
 	path_page_paper = "/tmp/papers/"
@@ -37,6 +38,7 @@ class PaperScanAndSort(EventDispatcher):
 		# WARNING ! obj attribute definition must be before the first
 		# attribute defined as property, otherwise it does not work !
 		self.obj = kwargs["obj"]
+		self.path_paper = os.path.join(kwargs["path_paper"], "unknown")
 		self.th_scan = None
 		self._num_page = 0 
 		self._nb_page = 1 
@@ -139,7 +141,7 @@ class PaperScanAndSort(EventDispatcher):
 
 	# Scan specific
 	def search_scanner(self):
-		return "plustek:libusb:001:014"
+		return "plustek:libusb:001:005"
 
 	# To avoid crushing existing paper waiting to be sorted in path_paper
 	def get_number_paper_to_sort(self):
@@ -180,15 +182,19 @@ class PaperScanAndSort(EventDispatcher):
 			# Scan success.
 			self.print_activity("Scanned page %d." % (self.num_page + 1))
 			self.num_page_scanned_inc(0)
+			self.num_page_inc(0)
 		        
 		return 0
 
-	def scan_top(instance, value):
+	def launch_scan(instance, value):
 		if (instance.num_page < instance.nb_page):
-			ret = instance.scan()
-			if ret:
-				return
-			instance.num_page_inc(value)
+        		# Wait for scan thread to finish before launching another one.
+        		if (instance.th_scan != None):
+        			instance.th_scan.join()
+        
+        		# Create thread that handles scan/convert
+        		instance.th_scan = Thread(target = instance.scan())
+        		instance.th_scan.start()
 		elif (instance.num_page == instance.nb_page):
 	                # Get the number of papers waiting to be sorted.		
 			nb_paper_to_sort = instance.get_number_paper_to_sort() + 1
@@ -206,18 +212,9 @@ class PaperScanAndSort(EventDispatcher):
 				ret = subprocess.call(cmd.split(" "))
                                 if (ret):
                                     instance.print_activity("[FAIL %d] %s.\n" % (ret, cmd))
-                                # New paper
-                                instance.new_paper(value)
+                        # New paper
+                        instance.new_paper(value)
 
-	def launch_scan(instance, value):
-		# Wait for scan thread to finish before launching another one.
-		if (instance.th_scan != None):
-			instance.th_scan.join()
-
-		# Create thread that handles scan/convert
-		instance.th_scan = Thread(instance.scan_top(value))#ThreadScan(instance)
-		instance.th_scan.start()
-		
 
 class ScanAndSortApp(App):
 	window_layout = None
@@ -226,7 +223,7 @@ class ScanAndSortApp(App):
 		kivy_app.stop()
 
 	def build(self):
-		self.paper = PaperScanAndSort(obj = self)
+		self.paper = PaperScanAndSort(obj = self, path_paper = args.scan_paper_src)
 
 		# Left side.
 		left_layout = BoxLayout(orientation = 'vertical', size_hint = (.1, 1))
@@ -284,7 +281,6 @@ class ScanAndSortApp(App):
 
 	def update_lbl_nb_num_page(self, instance, value):
 		self.lbl_nb_num_page.text = "%d / %d" % (instance.num_page, instance.nb_page)
-                print("coucou")
 
 	# Callbacks from PaperScanAndSort 
 	def update_nb_page(self, instance, value):
@@ -315,6 +311,17 @@ class ScanAndSortApp(App):
 		# Update label activity 
 		self.lbl_activity.text = instance.activity
 
+parser = argparse.ArgumentParser(description = 'Process grep_and_sed arguments.')
+parser.add_argument('--scan_paper_src', default = "/tmp/sort_scan_image/",
+        help = 'With create_db* = true: path where documents are '
+        'already classified.\n'
+        'With create_db* = false: path where freshly '
+        'scanned papers are copied after scan.')
+parser.add_argument('--scan_paper_dest', default = "",
+        help = 'Only used with create_db* = false: root path (local '
+        'or remote) where classified papers must be sent '
+        '(Your server for example).')
+args = parser.parse_args()
 
 if __name__ == "__main__":
 	kivy_app = ScanAndSortApp()

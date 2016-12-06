@@ -23,7 +23,8 @@ from paperSort import paperSort
 class EventHandler(pyinotify.ProcessEvent):
     def process_IN_CREATE(self, event):
         if re.match(".*tmp$", event.pathname):
-            paper.ocr(event.pathname)
+            if (os.path.isfile(event.pathname + ".txt") == False):
+                paper.ocr(event.pathname)
             (category, new_paper_name) = paper.add_to_db_with_svm(event.pathname + ".txt")
             if (category, new_paper_name) == (None, None):
                 return
@@ -195,11 +196,15 @@ class Paper:
         try:
             if args.no_use_db:
                 new_paper_name = "test_" + new_paper_name
- 
+            
+            if os.path.isfile(os.path.join(self.scan_paper_dest, category, new_paper_name)):
+                print("Error, file already exists !")
+                return 
+
             shutil.move(paper_path, os.path.join(self.scan_paper_dest, category, new_paper_name))
             shutil.move(paper_path + ".txt", os.path.join(self.scan_paper_dest, category, new_paper_name + ".txt"))
         except Exception as e:
-          print("Error moving paper (%s: %s)." % (e.__class__.__name__, e.message))
+            print("Error moving paper (%s: %s)." % (e.__class__.__name__, e.message))
         else:
             print("Ok.")
     
@@ -213,7 +218,15 @@ class Paper:
         vect_res = self.__parse_ocr_paper(ocr_paper_path);
         # Rename the file to remain consistent
         new_paper_name = "%s_%s" % (category, self.__format_time())
-        
+        # Check if a file does have this name already;
+        paper_suffix = ""
+        num_paper_suffix = 1
+        while (os.path.isfile(os.path.join(self.scan_paper_dest, category, new_paper_name + paper_suffix))):
+            paper_suffix = "_%d" % num_paper_suffix
+            num_paper_suffix += 1
+        new_paper_name = new_paper_name + paper_suffix
+        print(new_paper_name)
+
         if args.no_use_db:
             return new_paper_name
 
@@ -230,6 +243,13 @@ class Paper:
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
         svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
         new_paper_name = "%s_%s" % (svm_category, self.__format_time())
+        # Check if a file does have this name already;
+        paper_suffix = ""
+        num_paper_suffix = 1
+        while (os.path.isfile(os.path.join(self.scan_paper_dest, svm_category, new_paper_name + paper_suffix))):
+            paper_suffix = "_%d" % num_paper_suffix
+            num_paper_suffix += 1
+        new_paper_name = new_paper_name + paper_suffix
 
         if args.no_use_db:
             return (svm_category, new_paper_name)
