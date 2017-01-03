@@ -60,18 +60,6 @@ class paperSort:
 
         return values_dict
 
-    def add_vector_db(self, paper_db, vect_res, path, svm_category):
-        # Here we directly insert the vector in the database with the
-        # result of svm algo. Anyway, a notification will be sent to user with
-        # the URL to the image and the category found. If the category is wrong,
-        # the user will be able to modify it.
-        # TODO Send the url, the list of category (html mail) so that in one click
-        # we can send a notif to this program to change the category.
-        file_name = path.split('/')[-1]
-        if paper_db.file_name_exists("paper", file_name) is False:
-            paper_db.table_add_vector("paper", vect_res, file_name,
-                                        svm_category)
-
     # TODO Take care that some words are truncated by tokenisation
     # and bad ocr: try to fusion two consecutive words to see if
     # better results. http://blog.fouadhamdi.com/introduction-a-nltk/
