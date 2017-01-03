@@ -1,5 +1,5 @@
 import codecs
-#from nltk.corpus import stopwords
+import treetaggerwrapper
 from sklearn import svm
 import collections
 
@@ -12,12 +12,14 @@ class paperSort:
         with codecs.open(dictionary_path, 'r', 'utf-8') as fdict:
             self.dictionary = fdict.read().split()
         self.dictionary = sorted([word.lower() for word in self.dictionary])
+		self.tagger = treetaggerwrapper.TreeTagger(TAGLANG='fr', TAGDIR='/disk/nfs/wip/treetagger')
         self.clf = svm.SVC()
 
     # TODO Use psort et pdb
     def read_content_ocr_file(self, path):
         try:
-            fin = codecs.open(path, 'r', 'utf-8')
+            #fin = codecs.open(path, 'r', 'utf-8')
+			fin = open(path, 'r')
         except IOError:
             print(("Problem opening file : %s" % path))
             return None
@@ -27,20 +29,18 @@ class paperSort:
 
         return content
 
-    # Tokenise content, remove accents, lower everything, remove stopwords and
-    # remove incoherent words coming from the ocr process.
+    # Tokenise content with TreeTagger.
     def tokenise_content(self, content):
-        # I could use nltk to have a better tokenisation. TODO
-        list_word_with_stop = content.split()
-        # Now, I need to remove the maximum of 'senseless' words and
-        # remove the accents and finally to lower useful words.
-        # 1/ Start with stopword
-        #list_word = [unidecode(word.lower()) for word in list_word_with_stop if word.lower() not in self.french_stopwords]
+		list_remove_token = [ "ADV", "DET.*", "INT", "KON", "PRO.*", "PRP.*", 
+								"PUN.*", "SENT.*" ]
 
-        # 2/ Incoherent words from OCR.
-        # TODO
+        # 1/ Start with applying treetagger algorithm.
+		tags = self.tagger.tag_text(content)
 
-		#return list_word
+		# 2/ Returns list of named tuple Tag.
+		named_tags = treetaggerwrapper.make_tags(tags)
+
+		return named_tags
 
     def get_vector_list_word(self, dictionary, list_content_word):
         dict_res = {}

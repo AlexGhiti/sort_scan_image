@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 import os
 import re
@@ -141,7 +141,7 @@ class PaperScanAndSort(EventDispatcher):
 
 	# Scan specific
 	def search_scanner(self):
-		return "plustek:libusb:001:005"
+		return "plustek:libusb:001:009" 
 
 	# To avoid crushing existing paper waiting to be sorted in path_paper
 	def get_number_paper_to_sort(self):
