@@ -20,7 +20,7 @@ class paperSort:
         try:
             fin = codecs.open(path, 'r', 'utf-8')
         except IOError:
-            print("Problem opening file : %s" % path)
+            print(("Problem opening file : %s" % path))
             return None
         else:
             with fin:
@@ -53,11 +53,11 @@ class paperSort:
                     dict_res[dict_word] += 1
 
         # Get an ordered list of tuples corresponding to the dict vect_res.
-        list_tuple_ordered = sorted(dict_res.items(), key=lambda v: v[0])
+        list_tuple_ordered = sorted(list(dict_res.items()), key=lambda v: v[0])
         # Get an ordered dict from the list above
         dict_vect = collections.OrderedDict(list_tuple_ordered)
         # Finally get an ordered list of values :)
-        values_dict = dict_vect.values()
+        values_dict = list(dict_vect.values())
 
         return values_dict
 
