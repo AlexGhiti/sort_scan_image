@@ -1,0 +1,13 @@
+- Do not use stopwords from nltk (that removes dependencies to nltk): parse
+output of treetagger and remove : 
+	* ADV
+	* DET:ART
+	* DET:POS
+	* INT
+	* KON
+	* NUM ?
+	* PRO*
+	* PRP*
+	* PUN*
+	* SENT ?!	
+	
