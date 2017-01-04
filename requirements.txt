@@ -1,0 +1,4 @@
+pyinotify>=0.9.6
+numpy>=1.12.0b1
+scipy
+scikit-learn
