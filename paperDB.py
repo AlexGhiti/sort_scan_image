@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-
-
-
-import mysql.connector
-
+import MySQLdb
 
 # One instance of paperDB deals with one database (as much table
 # as wanted yet).
@@ -20,7 +15,7 @@ class paperDB:
                 content_pass = f.readlines()
             user = content_pass[4].strip('\n')
             password = content_pass[5].strip('\n')
-            self.db_conn = mysql.connector.connect(host = "localhost", user = user, password = password, database = "papers")
+            self.db_conn = MySQLdb.connect(host = "localhost", user = user, password = password, database = "papers")
             self.db_cursor = self.db_conn.cursor()
         except Exception as e:
             print("Error connecting to database. (%s)" % e.__class__.__name__)

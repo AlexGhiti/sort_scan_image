@@ -1,13 +1,8 @@
-#!/usr/bin/env python
-
-
-
 import os
 import re
 import subprocess
 import shutil
 import argparse
-from unidecode import unidecode
 import pyinotify
 import datetime
 
@@ -114,7 +109,7 @@ class Paper:
     # TODO: Sending mail with html obliges us to use dashboard or any server...Ok or not?
     # Request to modify category: /move/to_category/ANY_category/new_paper_name
     def send_mail_result(self, from_category, to_category, new_paper_path):
-        print("*** Sending notification mail to %s..." % "alexandre@ghiti.fr", end = "")
+        print("*** Sending notification mail to ",  "alexandre@ghiti.fr...", end = "")
 
         new_paper_name = new_paper_path.split('/')[-1]
         # Send the message via our own SMTP server, but don't include the
@@ -241,7 +236,7 @@ class Paper:
 
     def add_to_db_with_svm(self, ocr_paper_path):
         vect_res = self.__parse_ocr_paper(ocr_paper_path)
-        svm_category = unidecode(self.paper_sort.clf.predict(vect_res)[0])
+        svm_category = self.paper_sort.clf.predict(vect_res)[0].encode('ascii', 'ignore')
         new_paper_name = "%s_%s" % (svm_category, self.__format_time())
         # Check if a file does have this name already;
         paper_suffix = ""

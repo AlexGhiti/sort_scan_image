@@ -1,18 +1,17 @@
 import codecs
-from nltk.corpus import stopwords
+#from nltk.corpus import stopwords
 from sklearn import svm
-from unidecode import unidecode
 import collections
 
 class paperSort:
     def __init__(self, dictionary_path):
         # Get french stopwords from nltk
-        self.french_stopwords = set(stopwords.words('french'))
+        #self.french_stopwords = set(stopwords.words('french'))
         # Load dictionary and remove accents (can't name table column with
         # utf-8 character apparently).
         with codecs.open(dictionary_path, 'r', 'utf-8') as fdict:
             self.dictionary = fdict.read().split()
-        self.dictionary = sorted([unidecode(word.lower()) for word in self.dictionary])
+        self.dictionary = sorted([word.lower() for word in self.dictionary])
         self.clf = svm.SVC()
 
     # TODO Use psort et pdb
@@ -36,12 +35,12 @@ class paperSort:
         # Now, I need to remove the maximum of 'senseless' words and
         # remove the accents and finally to lower useful words.
         # 1/ Start with stopword
-        list_word = [unidecode(word.lower()) for word in list_word_with_stop if word.lower() not in self.french_stopwords]
+        #list_word = [unidecode(word.lower()) for word in list_word_with_stop if word.lower() not in self.french_stopwords]
 
         # 2/ Incoherent words from OCR.
         # TODO
 
-        return list_word
+		#return list_word
 
     def get_vector_list_word(self, dictionary, list_content_word):
         dict_res = {}
