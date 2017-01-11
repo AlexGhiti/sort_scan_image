@@ -1,4 +1,5 @@
 from nltk.tokenize import WordPunctTokenizer
+from nltk.corpus import stopwords
 
 from treetaggerwrapper import NotTag, Tag, TreeTagger
 from treetaggerwrapper import make_tags
@@ -8,22 +9,34 @@ from Stemmer import Stemmer
 from sklearn import svm
 
 from re import match, search
+from os import walk, path
 import codecs
+import unicodedata
+from unidecode import unidecode
 import collections
 
 class paperSort:
 	def __init__(self, dictionary_path):
 		# Get french stopwords from nltk
-		#self.french_stopwords = set(stopwords.words('french'))
-		# Load dictionary and remove accents (can't name table column with
-		# utf-8 character apparently).
-		with codecs.open(dictionary_path, 'r', 'utf-8') as fdict:
-			self.dictionary = fdict.read().split()
-		self.dictionary = sorted([word.lower() for word in self.dictionary])
+		self.french_stopwords = set(stopwords.words('french'))
+		# All dictionaries are in dictionaries/.
+		self.dictionary = []
+		for r, d, filenames in walk(dictionary_path):
+			for f in filenames:
+				with codecs.open(path.join(r, f), 'r', 'iso8859') as fdict:
+					self.dictionary += fdict.readlines()
+		# Sort dictionary and remove accents, too much words are correct except
+		# an accent.
+		self.dictionary = sorted([ unidecode(word.lower().rstrip()) for word in self.dictionary ])
 		self.tokenizer = WordPunctTokenizer()
 		self.tagger = TreeTagger(TAGLANG='fr', TAGDIR='/disk/nfs/wip/treetagger')
 		self.stemmer = Stemmer('french')
 		self.clf = svm.SVC()
+
+		# Sorted list of significant words for the corpus: this vector is used
+		# for describing vectors for SVM.
+		self.lemmas_corpus = []
+		self.paper_nb = 0
 
 	# TODO Use psort et pdb
 	def read_content_ocr_file(self, path):
@@ -38,6 +51,13 @@ class paperSort:
 						content = fin.read()
 
 		return content
+
+	def remove_stopwords(self, tokens):
+		return [ tk for tk in tokens if tk not in self.french_stopwords ]
+
+	# http://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
+	def __remove_accents(self, lemmas):
+		return [ lem for lem in unicodedata.normalize('NFD', ' '.join(lemmas)) if unicodedata.category(lem) != 'Mn' ]
 
 	# Problem with WordPunctTokenizer is that it splits 
 	# web addresses whereas they are very relevant...
@@ -93,26 +113,66 @@ class paperSort:
 		regexp = "<rep.*text=\"(.+?)\" />"
 		list_lemma += [ search(regexp, tag.what).group(1) for tag in tags if type(tag) is NotTag ]
 
-		# set is unordered collection of *distinct* objects, then
-		# this removes duplicates. TODO remove duplicates later,
-		# we need them for now for learning/categorizing.
-		# return list(set(list_lemma))
-		return list_lemma
+		# TODO I'm scared TreeTagger would not work correctly without
+		# accent, so I remove them now.
+		list_lemma_no_accent = [ unidecode(lem) for lem in list_lemma ]
+
+		return list_lemma_no_accent
 
 	def get_stems(self, lemmas):
-		# dict_stem = { lemma:  self.stemmer.stemWord(lemma) for lemma in lemmas }
-		# dict removes duplicates this way...
-		#Stem = collections.namedtuple('Stem', 'stem count')
-		#dict_stem = {}
-		#for lem in lemmas:
-		#	st = self.stemmer.stemWord(lem)
-		#	if lem in dict_sem:
-		#		dict_stem[lem].count += 1
-		#	else
-		#		dict_stem[lem].stem = st
 		list_stem = [ self.stemmer.stemWord(lem) for lem in lemmas ]
 
 		return list_stem
+
+	# content: content of a paper from get_lemma.
+	# returns dict { lemma: count }
+	# TODO unique function with get_stem_count
+	# words is no good.
+	def get_words_count(self, lwords):
+		dict_cnt = {}
+
+		for word in lwords:
+			if word in dict_cnt:
+				dict_cnt[word] += 1
+			else:
+				dict_cnt[word] = 1
+
+		return dict_cnt
+
+	# TFC codage !
+	# http://www.memoireonline.com/12/09/2917/m_Algorithmes-dapprentissage-pour-la-classification-de-documents0.html#toc1
+	# paper_count_lemmas = # dict(lemma: count) in current paper.
+	# lemmas_paper_nb = # dict(lemma: paper_count) nb of papers in which lemma appears.
+	def __tfidf(self, count, paper_count):
+		return (log(1 + count) * log(self.paper_nb / paper_count))
+
+	def __tfc(self, tfidf, sigma_sqrt_tfidf):
+		return tfidf / sigma_sqrt_tfidf
+
+	def get_vector_tfc_paper(self, paper_count_lemmas, lemmas_paper_nb):
+		# Compute TFxIDF
+		dict_tfidf = {}
+		for lem in self.lemmas_corpus:
+			if lem in paper_count_lemmas:
+				dict_tfidf[lem] = self.__tfidf(paper_count_lemmas[lem], lemmas_paper_nb[lem])
+			else
+				dict_tfidf[lem] = 0
+
+		# Compute the denominateur for TFC encoding.
+		sigma_sqrt_tfidf = 0
+		for l, v in dict_tfidf:
+			sigma_sqrt_tfidf += v
+		sigma_sqrt_tfidf = sqrt(sigma_sqrt_tfidf)
+
+		# Compute TFC vector that represents the paper :)
+		dict_tfc = {}
+		for lem in self.lemmas_corpus:
+			dict_tfc[lem] = self.__tfc(dict_tfidf[lem], sigma_sqrt_tfidf)
+
+		return sorted([ v for k, v in dict_tfc ])
+		
+	def lemma_in_dictionary(self, lem):
+		return lem in self.dictionary
 
 	#def get_vector_list_word(self, dictionary, list_content_word):
 	#	dict_res = {}
