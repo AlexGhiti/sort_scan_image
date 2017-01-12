@@ -7,13 +7,17 @@ from treetaggerwrapper import make_tags
 from Stemmer import Stemmer
 
 from sklearn import svm
+from math import sqrt, log
 
 from re import match, search
 from os import walk, path
 import codecs
 import unicodedata
 from unidecode import unidecode
-import collections
+
+from collections import namedtuple
+
+Paper = namedtuple('Paper', [ 'category', 'path' ])
 
 class paperSort:
 	def __init__(self, dictionary_path):
@@ -36,7 +40,22 @@ class paperSort:
 		# Sorted list of significant words for the corpus: this vector is used
 		# for describing vectors for SVM.
 		self.lemmas_corpus = []
-		self.paper_nb = 0
+		# Learning corpus infos.	
+		# { paper_name: 'namedtuple Paper' }
+		self.papers_corpus = {} 
+		# TODO change those variable names, I can't remember them !!
+		# Number of occurences of one lemma by paper in the learning corpus.
+		# { lemma: count in paper }
+		self.lemmas_count_paper = {}
+		# Number of time a lemma appears at least once
+		# in a paper.
+		self.lemmas_paper_nb = {}
+		# Vector that will feed SVM for each paper in corpus.
+		self.paper_tfc_vector = {}
+
+	def add_paper_to_corpus(self, paper_name, category, path):
+		p = Paper(category = category, path = path)
+		self.papers_corpus[paper_name] = p
 
 	# TODO Use psort et pdb
 	def read_content_ocr_file(self, path):
@@ -126,9 +145,7 @@ class paperSort:
 
 	# content: content of a paper from get_lemma.
 	# returns dict { lemma: count }
-	# TODO unique function with get_stem_count
-	# words is no good.
-	def get_words_count(self, lwords):
+	def get_lemmas_count(self, lwords):
 		dict_cnt = {}
 
 		for word in lwords:
@@ -141,38 +158,100 @@ class paperSort:
 
 	# TFC codage !
 	# http://www.memoireonline.com/12/09/2917/m_Algorithmes-dapprentissage-pour-la-classification-de-documents0.html#toc1
-	# paper_count_lemmas = # dict(lemma: count) in current paper.
+	# lemmas_count_paper = # dict(lemma: count) in current paper.
 	# lemmas_paper_nb = # dict(lemma: paper_count) nb of papers in which lemma appears.
+	# Those formulas can be found in http://theses.univ-lyon2.fr/documents/lyon2/2003/jalam_r/pdf/jalam_r-TH.2.pdf
 	def __tfidf(self, count, paper_count):
-		return (log(1 + count) * log(self.paper_nb / paper_count))
+		return (log(1 + count) * log(len(self.papers_corpus) / paper_count))
 
-	def __tfc(self, tfidf, sigma_sqrt_tfidf):
-		return tfidf / sigma_sqrt_tfidf
+	def __tfc(self, tfidf, sqrt_sigma_tfidf):
+		return tfidf / sqrt_sigma_tfidf
 
-	def get_vector_tfc_paper(self, paper_count_lemmas, lemmas_paper_nb):
+	def get_vector_tfc_paper(self, pname):
 		# Compute TFxIDF
 		dict_tfidf = {}
 		for lem in self.lemmas_corpus:
-			if lem in paper_count_lemmas:
-				dict_tfidf[lem] = self.__tfidf(paper_count_lemmas[lem], lemmas_paper_nb[lem])
-			else
-				dict_tfidf[lem] = 0
+			dict_tfidf[lem] = self.__tfidf(self.lemmas_count_paper[pname][lem], self.lemmas_paper_nb[lem])
 
 		# Compute the denominateur for TFC encoding.
-		sigma_sqrt_tfidf = 0
-		for l, v in dict_tfidf:
-			sigma_sqrt_tfidf += v
-		sigma_sqrt_tfidf = sqrt(sigma_sqrt_tfidf)
+		sqrt_sigma_tfidf = 0
+		for l, v in dict_tfidf.items():
+			sqrt_sigma_tfidf += v * v
+		sqrt_sigma_tfidf = sqrt(sqrt_sigma_tfidf)
 
 		# Compute TFC vector that represents the paper :)
 		dict_tfc = {}
 		for lem in self.lemmas_corpus:
-			dict_tfc[lem] = self.__tfc(dict_tfidf[lem], sigma_sqrt_tfidf)
+			dict_tfc[lem] = self.__tfc(dict_tfidf[lem], sqrt_sigma_tfidf)
 
-		return sorted([ v for k, v in dict_tfc ])
+		return sorted([ v for k, v in dict_tfc.items() ])
 		
 	def lemma_in_dictionary(self, lem):
 		return lem in self.dictionary
+
+	def __get_category(self):
+		set_category = set()
+		for pname, p in self.papers_corpus.items():
+			if p.category not in set_category:
+				set_category.add(p.category)
+
+		return set_category
+
+	# TODO serialize the output of that, can't learn at each 
+	# launch, too long.
+	def learn(self, debug = False):
+		# Get the lemmas that represent the corpus.
+		for pname, p in self.papers_corpus.items():
+			# Read file.
+			text = self.read_content_ocr_file(p.path)
+			# 1/ Tokenize.
+			tokens = self.get_tokens(text)
+			# 2/ Remove stopwordself.
+			tokens_no_sw = self.remove_stopwords(tokens)
+			# 3/ Tag.
+			tags = self.get_tags(tokens_no_sw)
+			# 4/ Lemmatize.
+			list_lemmas = self.get_lemmas(tags)
+			# 5/ Store for each paper a dict { lemma: count }.
+			self.lemmas_count_paper[pname] = self.get_lemmas_count(list_lemmas)
+			if len(self.lemmas_count_paper[pname]) == 0:
+				print("WARNING: ", pname, " does not contain any lemma in the corpus !")
+			# 6/ Store for each lemma in corpus the number of papers it appears in.
+			#    And add the lemma to the global only if it appears at least in 2
+			#    papers and in dictionaries.
+			for lem in self.lemmas_count_paper[pname]:
+				if lem in self.lemmas_paper_nb:
+				    self.lemmas_paper_nb[lem] += 1
+				    if lem not in self.lemmas_corpus and self.lemma_in_dictionary(lem):
+				        self.lemmas_corpus += [ lem ]
+				else:
+				    self.lemmas_paper_nb[lem] = 1
+			# 7/ Sort lemmas in corpus. 
+			self.lemmas_corpus.sort()
+
+		# Now we have all the lemmas in the corpus, we can compute the vectors
+		# that represent each paper in the corpus and hand it to SVM.
+		for pname, p in self.papers_corpus.items():
+			# 1/ Extend lemmas_count_paper at all the lemmas in the corpus
+			#    (until then it contained only its own lemmas).
+			for lem in self.lemmas_corpus:
+				if lem not in self.lemmas_count_paper[pname]:
+					self.lemmas_count_paper[pname][lem] = 0
+			# 2/ Generate TFC vector.	
+			self.paper_tfc_vector[pname] = self.get_vector_tfc_paper(pname)
+			 
+			
+		if debug == True:
+			print(self.lemmas_corpus)
+			print("Number of lemmas   : ", len(self.lemmas_corpus))
+			print("Number of papers   : ", len(self.papers_corpus))
+			cat = self.__get_category()
+			print("Category : ", ' '.join(cat))
+			print("Number of category : ", len(cat))
+			for pname, p in self.papers_corpus.items():
+				print(pname, p.category)
+				print(self.paper_tfc_vector[pname])
+			
 
 	#def get_vector_list_word(self, dictionary, list_content_word):
 	#	dict_res = {}
