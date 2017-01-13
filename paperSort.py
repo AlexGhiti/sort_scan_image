@@ -15,7 +15,7 @@ import codecs
 import unicodedata
 from unidecode import unidecode
 
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 
 Paper = namedtuple('Paper', [ 'category', 'path' ])
 
@@ -184,7 +184,13 @@ class paperSort:
 		for lem in self.lemmas_corpus:
 			dict_tfc[lem] = self.__tfc(dict_tfidf[lem], sqrt_sigma_tfidf)
 
-		return sorted([ v for k, v in dict_tfc.items() ])
+		# Sort by alphabetical order on lemmas.
+		# Get an ordered list of tuples corresponding to the dict vect_res.
+		tuple_ordered_dict_tfc = sorted(list(dict_tfc.items()), key=lambda v: v[0])
+		# Get an ordered dict from the list above
+		ordered_dict_tfc = OrderedDict(tuple_ordered_dict_tfc)
+		# Finally get an ordered list of values :)
+		return list(ordered_dict_tfc.values())
 		
 	def lemma_in_dictionary(self, lem):
 		return lem in self.dictionary
