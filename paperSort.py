@@ -6,8 +6,12 @@ from treetaggerwrapper import make_tags
 
 from Stemmer import Stemmer
 
-from sklearn import svm
+import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+from scipy.cluster.hierarchy import dendrogram
 from math import sqrt, log
+
+from matplotlib import pyplot as plt
 
 from re import match, search
 from os import walk, path
@@ -16,6 +20,9 @@ import unicodedata
 from unidecode import unidecode
 
 from collections import namedtuple, OrderedDict
+import itertools
+
+from pprint import pprint
 
 Paper = namedtuple('Paper', [ 'category', 'path' ])
 
@@ -35,7 +42,7 @@ class paperSort:
 		self.tokenizer = WordPunctTokenizer()
 		self.tagger = TreeTagger(TAGLANG='fr', TAGDIR='/disk/nfs/wip/treetagger')
 		self.stemmer = Stemmer('french')
-		self.clf = svm.SVC()
+		#self.clf = svm.SVC()
 
 		# Sorted list of significant words for the corpus: this vector is used
 		# for describing vectors for SVM.
@@ -259,23 +266,54 @@ class paperSort:
 				print(self.paper_tfc_vector[pname])
 			
 
-	#def get_vector_list_word(self, dictionary, list_content_word):
-	#	dict_res = {}
+		# Last, fit paper_tfc_vector !
+		# 1/ Create a list from dictionary paper_tfc_vector.
+		# X = [ l for k, l in self.paper_tfc_vector.items() ]
+		X = []
+		Yname = []
+		for k, l in self.paper_tfc_vector.items():
+			X.append(l)
+			Yname.append(k)
 
-	#	for dict_word in dictionary:
-	#		dict_res[dict_word] = 0
-	#		for word in list_content_word:
-	#			if dict_word in word:
-	#				dict_res[dict_word] += 1
+		#X = numpy.concatenate(tmp)
+		if debug == True:
+			print("List to fit : ", X)
 
-	#	# Get an ordered list of tuples corresponding to the dict vect_res.
-	#	list_tuple_ordered = sorted(list(dict_res.items()), key=lambda v: v[0])
-	#	# Get an ordered dict from the list above
-	#	dict_vect = collections.OrderedDict(list_tuple_ordered)
-	#	# Finally get an ordered list of values :)
-	#	values_dict = list(dict_vect.values())
+		# 2/ Fit with AgglomerativeClustering
+		# Try with n_clusters = 1 and check the tree.
+		model = AgglomerativeClustering(linkage = 'ward', n_clusters = 4)
+		model.fit(X)
+		ii = itertools.count(len(self.papers_corpus))
+		tree = [{'node_id': next(ii), 'left': x[0], 'right':x[1]} for x in model.children_]
+		if debug == True:
+			pprint(tree)
+			self.visualize(model, Yname)
 
-	#	return values_dict
+	# Visualization from https://github.com/scikit-learn/scikit-learn/blob/70cf4a676caa2d2dad2e3f6e4478d64bcb0506f7/examples/cluster/plot_hierarchical_clustering_dendrogram.py
+	def visualize(self, model, labels):
+		plt.title('Hierarchical Clustering Dendrogram')
+		self.plot_dendrogram(model, labels = labels)
+		plt.show()
+
+	def plot_dendrogram(self, model, **kwargs):
+	    # Children of hierarchical clustering
+	    children = model.children_
+	
+	    # Distances between each pair of children
+	    # Since we don't have this information, we can use a uniform one for plotting
+		# shape[0] => nb of vectors in children
+		# shape[1] => vector dimension
+		# arange => 0..shape[0]
+	    distance = np.arange(children.shape[0])
+		
+	    # The number of observations contained in each cluster level
+	    no_of_observations = np.arange(2, children.shape[0] + 2)
+	
+	    # Create linkage matrix and then plot the dendrogram
+	    linkage_matrix = np.column_stack([children, distance, no_of_observations]).astype(float)
+	
+	    # Plot the corresponding dendrogram
+	    dendrogram(linkage_matrix, **kwargs)
 
 # TODO Take care that some words are truncated by tokenisation
 # and bad ocr: try to fusion two consecutive words to see if
