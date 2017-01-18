@@ -24,7 +24,7 @@ for cat, path in category.items():
 		for f in filenames:
 			if match(".*txt", f) and f not in except_file:
 				paper_name = search("(.+?).txt", f).group(1)
-				s.add_paper_to_corpus(paper_name, cat, os.path.join(r, f))
+				s.add_raw_paper_to_corpus(paper_name, os.path.join(r, f))
 
 # Start learning from this corpus.
 s.learn(debug = True)
