@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
-from scipy.cluster.hierarchy import dendrogram
+from scipy.cluster.hierarchy import dendrogram, linkage
 
 from matplotlib import pyplot as plt
 
@@ -8,6 +8,7 @@ from re import match, search
 from os import walk, path
 import codecs
 from unidecode import unidecode
+from collections import namedtuple
 
 import itertools
 
@@ -29,12 +30,16 @@ class paperSort:
 		self.dictionary = sorted([ unidecode(word.lower().rstrip()) for word in self.dictionary ])
 		# Sorted list of words from dictionary (!!) in the corpus.
 		self.lemmas_corpus = []
-		self.lemmas_corpus_in_dict = []
+		# TODO: What is that for ?!
+		# self.lemmas_corpus_in_dict = []
 		# Learning corpus infos (list of Paper objects).
 		self.papers_corpus = [] 
 		# Number of time a lemma appears at least once
 		# in a paper.
 		self.lemmas_paper_nb = {}
+		# A list of 3-dimension vector containing 3 words representing each
+		# cluster obtained from linkage.
+		self.cluster_labels = []
 
 	# Add paper that needs preprocessing.
 	def add_raw_paper_to_corpus(self, paper_name, path):
@@ -103,52 +108,141 @@ class paperSort:
 		self.fit_corpus(debug)
 
 	def fit_corpus(self, debug):
-		# Last, fit paper_tfc_vector !
-		# 1/ Create a list from dictionary paper_tfc_vector.
+		# 1/ Create data vector for AgglomerativeClustering.
 		X = []
 		Yname = []
 		for p in self.papers_corpus:
 			X.append(p.tfc)
 			Yname.append(p.name)
 
-		if debug == True:
-			print("List to fit : ", X)
-
 		# 2/ Fit with AgglomerativeClustering
-		# Try with n_clusters = 1 and check the tree.
-		model = AgglomerativeClustering(linkage = 'ward', n_clusters = 4)
-		model.fit(X)
-		ii = itertools.count(len(self.papers_corpus))
-		tree = [{'node_id': next(ii), 'left': x[0], 'right':x[1]} for x in model.children_]
+		#model = AgglomerativeClustering(linkage = 'complete', affinity = 'cosine', n_clusters = 1)
+		#model.fit(X)
+		#ii = itertools.count(len(self.papers_corpus))
+		#tree = [{'node_id': next(ii), 'left': x[0], 'right':x[1]} for x in model.children_]
+
+		# 2bis/ Use scipy library, returns easier/more infos than scikit-learn.
+		Z = linkage(X, "complete")
+		print(Z)
+
+		# 3/ Label every node (except leaves) in the resulting tree.
+		self.label_clustering(Z)
+
 		if debug == True:
-			pprint(tree)
-			self.visualize(model, Yname)
+			# calculate full dendrogram
+			plt.figure(figsize=(25, 10))
+			plt.title('Hierarchical Clustering Dendrogram')
+			plt.xlabel('sample index')
+			plt.ylabel('distance')
+			self.fancy_dendrogram(
+					    Z,
+					    leaf_rotation=90.,  # rotates the x axis labels
+					    leaf_font_size=8.,  # font size for the x axis labels
+						#labels = Yname,
+						annotate_above = 0.5,
+						max_d = 1.5,
+			)
 
-	# Visualization from https://github.com/scikit-learn/scikit-learn/blob/70cf4a676caa2d2dad2e3f6e4478d64bcb0506f7/examples/cluster/plot_hierarchical_clustering_dendrogram.py
-	def visualize(self, model, labels):
-		plt.title('Hierarchical Clustering Dendrogram')
-		self.plot_dendrogram(model, labels = labels)
-		plt.show()
+			plt.show()
 
-	def plot_dendrogram(self, model, **kwargs):
-	    # Children of hierarchical clustering
-	    children = model.children_
+	# n = nb of papers.
+	# Z(i, 0) + Z(i, 1) form new cluster i + n
+	# distance between Z(i, 0) and Z(i, 1) = Z(i, 2)
+	# Z(i, 3) = number of papers in new cluster i + n
+	def label_clustering(self, Z):
+		# Start with head of tree which is node number n + len(Z)
+		# but which is in the last element of Z (TODO Check)
+		vect = {}
+		self.label_clusters_in_tree(Z, n + len(Z), len(self.papers_corpus), vect)
+
+	# Go through the tree, and compute the representing words when going back up
+	# the tree
+	# Z: output of linkage
+	# i: ith element in Z
+	def label_clusters_in_tree(self, Z, i, N, vect):
+		# If already computed, returns the result.
+		if i in vect:
+			return vect[i]
+
+		left = Z[i, 0]
+		right = Z[i, 1]
+
+		if left > N:
+			vect[left] = self.label_clusters_in_tree(self, Z, left - N)
+		else:
+			# Returns the vect that represents best a paper: simply returns its
+			# TFC vector :)
+			# TODO Check if lists are indexed at 0 or 1...??
+			return self.papers_corpus[left].tfc
+
+		if right > N:
+			vect[right] = self.label_clusters_in_tree(self, Z, right - N)
+		else:
+			return self.papers_corpus[right].tfc
+
+		# Here we compute the most 3 (TODO) significant dimensions
+		# that both children have in common
+		# and returns a tfc vector representing the cluster i.
+		# TODO at the moment, it is just a mean between both
+		# vector, find better if there is ?
+		vect[i] = compute_like(i, vect[left], vect[right])
+
+		return vect[i]
+
+	# Returns the 3 composantes whose distance is max.
+	def compute_like(self, num_cluster, vect_left, vect_right):
+		Dist = namedtuple(Dist, "idx dist")
+
+		# Retains the 3 closest points between vect_left and vect_right.
+		# idx is the index in vect_left/right and thus gives the associated word
+		# dist is the corresponding distance.
+		dist = [ Dist(idx = -1, dist = 0),
+				 Dist(idx = -1, dist = 0),
+				 Dist(idx = -1, dist = 0) ]
+
+		vect_tfc_cluster = []
+		for idvect, l, r in enumerate(zip(vect_left, vect_right)):
+			# TODO Is this mean good ? 
+			vect_tfc_cluster.append((l + r) / 2)
+			# TODO distance function should be the same used by linkage ?
+			dist_lr = abs(l - r) 
+			for iddist, d in enumerate(dist):
+				if dist_lr > d.dist:
+					dist[iddist].dist = dist_lr
+					dist[iddist].idx = idvect
+					break
+			
+		for d in dist:
+			self.cluster_labels[num_cluster].append(self.lemmas_corpus[d.idx])
+
+		print("num_cluster ", num_cluster, ": ", self.cluster_labels[num_cluster]) 
+
+		return vect_tfc_cluster 
+
+	# https://joernhees.de/blog/2015/08/26/scipy-hierarchical-clustering-and-dendrogram-tutorial/
+	def fancy_dendrogram(self, *args, **kwargs):
+	    max_d = kwargs.pop('max_d', None)
+	    if max_d and 'color_threshold' not in kwargs:
+	        kwargs['color_threshold'] = max_d
+	    annotate_above = kwargs.pop('annotate_above', 0)
 	
-	    # Distances between each pair of children
-	    # Since we don't have this information, we can use a uniform one for plotting
-		# shape[0] => nb of vectors in children
-		# shape[1] => vector dimension
-		# arange => 0..shape[0]
-	    distance = np.arange(children.shape[0])
-		
-	    # The number of observations contained in each cluster level
-	    no_of_observations = np.arange(2, children.shape[0] + 2)
+	    ddata = dendrogram(*args, **kwargs)
 	
-	    # Create linkage matrix and then plot the dendrogram
-	    linkage_matrix = np.column_stack([children, distance, no_of_observations]).astype(float)
-	
-	    # Plot the corresponding dendrogram
-	    dendrogram(linkage_matrix, **kwargs)
+	    if not kwargs.get('no_plot', False):
+	        plt.title('Hierarchical Clustering Dendrogram (truncated)')
+	        plt.xlabel('sample index or (cluster size)')
+	        plt.ylabel('distance')
+	        for i, d, c in zip(ddata['icoord'], ddata['dcoord'], ddata['color_list']):
+	            x = 0.5 * sum(i[1:3])
+	            y = d[1]
+	            if y > annotate_above:
+	                plt.plot(x, y, 'o', c=c)
+	                plt.annotate("%.3g" % y, (x, y), xytext=(0, -5),
+	                             textcoords='offset points',
+	                             va='top', ha='center')
+	        if max_d:
+	            plt.axhline(y=max_d, c='k')
+	    return ddata	
 
 # TODO Take care that some words are truncated by tokenisation
 # and bad ocr: try to fusion two consecutive words to see if
