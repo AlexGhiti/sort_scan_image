@@ -4,7 +4,7 @@ sys.path.append(os.path.abspath(os.path.join('..', '..')))
 from paperSort import paperSort
 
 # psy, smile contrat, 
-except_file = [ "Salaire_30122016-125838.txt", "Medical_19122016-194520.txt", "Salaire_11122016-171444.txt" ]
+except_file = [ "Medical_salaire2", "Salaire_30122016-125838.txt", "Medical_19122016-194520.txt", "Salaire_11122016-171444.txt" ]
 
 def __get_category_path(path):
         category_path = [] 
