@@ -18,7 +18,7 @@ from re import match, search
 class Paper:
 	french_stopwords = set(stopwords.words('french'))
 	tokenizer = WordPunctTokenizer()
-	tagger = TreeTagger(TAGLANG='fr', TAGDIR='/disk/nfs/wip/treetagger')
+	tagger = TreeTagger(TAGLANG='fr', TAGDIR='/home/alex/wip/treetagger')
 	stemmer = Stemmer('french')
 
 	# At init, lemmas_count is initialized because it depends only
@@ -34,6 +34,7 @@ class Paper:
 		else:
 			self.lemmas_count = lemmas_count
 		self.tfc = tfc
+		print("*** Adding {}".format(self.name))
 
 	def read_paper(self, path):
 		try:
@@ -176,7 +177,7 @@ class Paper:
 		text = self.read_paper(self.path)
 		# 1/ Tokenize.
 		tokens = self.get_tokens(text)
-		# 2/ Remove stopwordself.
+		# 2/ Remove stopwords.
 		tokens_no_sw = self.remove_stopwords(tokens)
 		# 3/ Tag.
 		tags = self.get_tags(tokens_no_sw)

@@ -14,9 +14,9 @@ def __get_category_path(path):
         return category_path
 
 # { category name: category path }
-category = { cat.split("/")[-1]: cat for cat in __get_category_path("/disk/owncloud/AlexGhiti/files/common/papers/") }
+category = { cat.split("/")[-1]: cat for cat in __get_category_path("/home/alex/wip/papers/") }
 
-s = paperSort("/disk/nfs/wip/sort_scan_image/dictionaries")
+s = paperSort("/home/alex/wip/sort_scan_image/dictionaries")
 
 # Add papers to learning corpus.
 for cat, path in category.items():

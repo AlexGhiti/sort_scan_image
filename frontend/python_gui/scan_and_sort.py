@@ -34,7 +34,7 @@ class PaperScanAndSort(EventDispatcher):
 	path_page_paper = "/tmp/papers/"
 
 	def __init__(self, *args, **kwargs):
-		super(PaperScanAndSort, self).__init__(*args, **kwargs)
+		super(PaperScanAndSort, self).__init__()
 		# WARNING ! obj attribute definition must be before the first
 		# attribute defined as property, otherwise it does not work !
 		self.obj = kwargs["obj"]
@@ -45,52 +45,52 @@ class PaperScanAndSort(EventDispatcher):
 		self._num_page_scanned = 0
 		self._activity = "No error"
 
-        @property
+	@property
 	def nb_page(self):
 		return self._nb_page
-        
-        @nb_page.setter
+	
+	@nb_page.setter
 	def nb_page(self, value):
 		self._nb_page = value
 		self.obj.update_nb_page(self, value)
-        
-        @property	
-        def num_page(self):
+	
+	@property	
+	def num_page(self):
 		return self._num_page
 
-        @num_page.setter
+	@num_page.setter
 	def num_page(self, value):
 		self._num_page = value
 		self.obj.update_num_page(self, value)
 	
-        @property	
-        def num_page_scanned(self):
+	@property	
+	def num_page_scanned(self):
 		return self._num_page_scanned
 
-        @num_page_scanned.setter
+	@num_page_scanned.setter
 	def num_page_scanned(self, value):
 		self._num_page_scanned = value
 		self.obj.update_num_page_scanned(self, value)
-        
-        @property	
-        def activity(self):
+	
+	@property	
+	def activity(self):
 		return self._activity
 
-        @activity.setter
+	@activity.setter
 	def activity(self, value):
 		self._activity = value
 		self.obj.update_activity(self, value)
 
 	# Attributes setters/getters
-        # nb_page can be inc/dec while scanning paper,
-        # but we need to take care that it is higher than
-        # the number of scanned_page (TODO or discard all
-        # the pages that are higher...).
+	# nb_page can be inc/dec while scanning paper,
+	# but we need to take care that it is higher than
+	# the number of scanned_page (TODO or discard all
+	# the pages that are higher...).
 	def nb_page_inc(instance, value):
 		instance.nb_page += 1
 
 	def nb_page_dec(instance, value):
-	    if (instance.nb_page > 1 and instance.nb_page > instance.num_page_scanned):
+		if (instance.nb_page > 1 and instance.nb_page > instance.num_page_scanned):
 			instance.nb_page -= 1
 
 	def nb_page_clear(instance, value):
@@ -103,7 +103,7 @@ class PaperScanAndSort(EventDispatcher):
 	def num_page_dec(instance, value):
 		if (instance.num_page >= 1):
 			instance.num_page -= 1
-                               
+			       
 	def num_page_clear(instance, value):
 		instance.num_page = 0
 
@@ -118,9 +118,9 @@ class PaperScanAndSort(EventDispatcher):
 	def num_page_scanned_clear(instance, value):
 		instance.num_page_scanned = 0
 
- 	def new_paper(instance, value):
-                # TODO Stop thread that scans.
-                #instance.th_scan.stop()
+	def new_paper(instance, value):
+		# TODO Stop thread that scans.
+		#instance.th_scan.stop()
 		# Clear attributes
 		instance.num_page_clear(value)
 		instance.num_page_scanned_clear(value)
@@ -183,24 +183,24 @@ class PaperScanAndSort(EventDispatcher):
 			self.print_activity("Scanned page %d." % (self.num_page + 1))
 			self.num_page_scanned_inc(0)
 			self.num_page_inc(0)
-		        
+			
 		return 0
 
 	def launch_scan(instance, value):
 		if (instance.num_page < instance.nb_page):
-        		# Wait for scan thread to finish before launching another one.
-        		if (instance.th_scan != None):
-        			instance.th_scan.join()
-        
-        		# Create thread that handles scan/convert
-        		instance.th_scan = Thread(target = instance.scan())
-        		instance.th_scan.start()
+			# Wait for scan thread to finish before launching another one.
+			if (instance.th_scan != None):
+				instance.th_scan.join()
+	
+			# Create thread that handles scan/convert
+			instance.th_scan = Thread(target = instance.scan())
+			instance.th_scan.start()
 		elif (instance.num_page == instance.nb_page):
-	                # Get the number of papers waiting to be sorted.		
+			# Get the number of papers waiting to be sorted.		
 			nb_paper_to_sort = instance.get_number_paper_to_sort() + 1
 			if (instance.nb_page == 1):
 				cmd = "cp %s %s" % (os.path.join(instance.path_page_paper, "1.pnm"),
-                                                    os.path.join(instance.path_paper, "scan_and_sort%d.tmp" % nb_paper_to_sort))
+						    os.path.join(instance.path_paper, "scan_and_sort%d.tmp" % nb_paper_to_sort))
 				ret = subprocess.call(cmd.split(" "))
 				if (ret):
 					instance.print_activity("[FAIL %d] %s.\n" % (ret, cmd))
@@ -210,10 +210,10 @@ class PaperScanAndSort(EventDispatcher):
 					cmd += os.path.join(instance.path_page_paper, "%d.pnm " % i)
 				cmd += "-append %s" % os.path.join(instance.path_paper, "scan_and_sort%d.tmp" % nb_paper_to_sort)
 				ret = subprocess.call(cmd.split(" "))
-                                if (ret):
-                                    instance.print_activity("[FAIL %d] %s.\n" % (ret, cmd))
-                        # New paper
-                        instance.new_paper(value)
+				if (ret):
+				    instance.print_activity("[FAIL %d] %s.\n" % (ret, cmd))
+			# New paper
+			instance.new_paper(value)
 
 
 class ScanAndSortApp(App):
@@ -297,7 +297,7 @@ class ScanAndSortApp(App):
 			self.img_page.source = ""
 		self.img_page.reload()
 	
- 	def update_num_page_scanned(self, instance, value):
+	def update_num_page_scanned(self, instance, value):
 		# Update image
 		if (instance.num_page_scanned):
 			self.img_page.source = os.path.join(instance.path_page_paper, "%d.jpg" % instance.num_page_scanned)
@@ -313,17 +313,17 @@ class ScanAndSortApp(App):
 
 parser = argparse.ArgumentParser(description = 'Process grep_and_sed arguments.')
 parser.add_argument('--scan_paper_src', default = "/tmp/sort_scan_image/",
-        help = 'With create_db* = true: path where documents are '
-        'already classified.\n'
-        'With create_db* = false: path where freshly '
-        'scanned papers are copied after scan.')
+	help = 'With create_db* = true: path where documents are '
+	'already classified.\n'
+	'With create_db* = false: path where freshly '
+	'scanned papers are copied after scan.')
 parser.add_argument('--scan_paper_dest', default = "",
-        help = 'Only used with create_db* = false: root path (local '
-        'or remote) where classified papers must be sent '
-        '(Your server for example).')
+	help = 'Only used with create_db* = false: root path (local '
+	'or remote) where classified papers must be sent '
+	'(Your server for example).')
 args = parser.parse_args()
 
 if __name__ == "__main__":
 	kivy_app = ScanAndSortApp()
-	kivy_app.run()
+	kivy_app.run(None)
 

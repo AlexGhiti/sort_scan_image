@@ -7,12 +7,14 @@ import pygraphviz as pgv
 
 from re import match, search
 from os import walk, path
+import random
 import codecs
 from unidecode import unidecode
 from collections import namedtuple
 
 import itertools
 
+import simplejson as json
 from pprint import pprint
 
 from paper import Paper
@@ -115,6 +117,7 @@ class paperSort:
 		for p in self.papers_corpus:
 			X.append(p.tfc)
 			Yname.append(p.name)
+			self.cluster_labels.append(p.name)
 
 		# 2/ Fit with AgglomerativeClustering
 		#model = AgglomerativeClustering(linkage = 'complete', affinity = 'cosine', n_clusters = 1)
@@ -127,11 +130,23 @@ class paperSort:
 		print(Z)
 
 		# 3/ Label every node (except leaves) in the resulting tree.
-		self.label_clustering(Z, len(self.papers_corpus))
+		# self.label_clustering(Z, len(self.papers_corpus), Yname)
+		N = len(self.papers_corpus)
+		Ypath = [ n + ".bmp.png_resize.png" for n in Yname ]
+		tree_json = self.go_through(Z, N + len(Z) - 1, N, Ypath)
+		with open("coucou.json", "w") as f:
+			f.write(json.dumps(tree_json))
+		with open("image.js", "w") as f:
+			f.write("document.write(\'<svg width=\"960\" height=\"960\"> \\\n <defs id=\"mdef\"> \\\n")
+			for i in range(0, N):
+				f.write('<pattern id="image' + str(i) + '" x="0" y="0" height="40" width="40"> \\\n') 
+				f.write('<image x="0" y="0" width="200" height="200" xlink:href="file:///home/alex/wip/paper_web/papers/' + Yname[i] + '.bmp.png_resize.png"></image> \\' + "\n")
+				f.write('</pattern> \\\n')
+			f.write("</defs> \\\n </svg>');");
 
 		if debug == True:
 			# calculate full dendrogram
-			plt.figure(figsize=(25, 10))
+			plt.figure(figsize=(25, 18))
 			plt.title('Hierarchical Clustering Dendrogram')
 			plt.xlabel('sample index')
 			plt.ylabel('distance')
@@ -139,18 +154,43 @@ class paperSort:
 					    Z,
 					    leaf_rotation=90.,  # rotates the x axis labels
 					    leaf_font_size=8.,  # font size for the x axis labels
-						#labels = Yname,
+						labels = Yname,
 						annotate_above = 0,
-						max_d = 1.5,
+					max_d = 1.5,
 			)
 
 			plt.show()
+			plt.savefig("dendo.svg")
+
+	def go_through(self, Z, num_cluster, N, Yname):
+		idx_z = num_cluster - N
+		left = int(Z[idx_z, 0])
+		right = int(Z[idx_z, 1])
+		dist_lr = Z[idx_z, 2]
+		print(num_cluster, ": ", left, right, dist_lr)
+		
+		new_vect = { "children": [], "category": 0, "category_name": "" }
+
+		if left >= N:
+			new_vect["children"].append(self.go_through(Z, left, N, Yname))
+		else:
+			size = random.randint(500, 1000)
+			new_vect["children"].append({ "name": Yname[left], "children": None, "size": size, "category": 0, "category_name": "" })
+
+		if right >= N:
+			new_vect["children"].append(self.go_through(Z, right, N, Yname))
+		else:
+			size = random.randint(500, 1000)
+			new_vect["children"].append({ "name": Yname[right], "children": None, "size": size, "category": 0, "category_name": "" })
+
+		return new_vect 
+
 
 	# N = nb of papers.
 	# Z(i, 0) + Z(i, 1) form new cluster i + N
 	# distance between Z(i, 0) and Z(i, 1) = Z(i, 2)
 	# Z(i, 3) = number of papers in new cluster i + N
-	def label_clustering(self, Z, N):
+	def label_clustering(self, Z, N, Yname):
 		# vect contains tfc vectors all the clusters, not just
 		# single papers.
 		vect = [None] * (N + len(Z)) 
@@ -160,8 +200,7 @@ class paperSort:
 			self.cluster_labels.append([])
 
 		# Graphviz init.
-		tree = pgv.AGraph(directed = True)
-
+		tree = pgv.AGraph(directed = True, rank = "max")
 		# Go through the tree to compute vect and self.cluster_labels.
 		self.nb_clusters = 0
 		self.label_clusters_in_tree(Z, N + len(Z) - 1, N, vect, tree)
@@ -170,9 +209,23 @@ class paperSort:
 		else:
 			print("clusters: ", self.nb_clusters)
 
+		leaves = tree.add_subgraph([ i for i in range(N) ], "leaves", rank = "same") 
+		# Image for documents.
+		for i in range(N):
+			node = leaves.get_node(i)
+			node.attr["fontsize"] = "20.0"
+			node.attr["splines"] = "ortho"
+			node.attr["shape"] = "box"
+			node.attr["label"] = ""
+			print(path.join("/home/alex/wip/papers/", Yname[i] + "_resize"))
+			node.attr["image"] = path.join("/home/alex/wip/papers/", Yname[i] + ".bmp.png_resize.png")#Salaire_30122016-125838.bmp.png_resize"
+
 		# Output graphviz file.
 		tree.layout(prog = "dot")
-		tree.draw("tree.png")
+		tree.draw("tree.jpg")
+		tree.write("tree.dot")
+
+
 
 
 	# Go through the tree, and compute the representing words when going back up
@@ -212,7 +265,7 @@ class paperSort:
 		# Create graphviz view.
 		tree.add_node(num_cluster)
 		node_cluster = tree.get_node(num_cluster)
-		node_cluster.attr["label"] = str(num_cluster) + " " + " ".join(self.cluster_labels[num_cluster])
+		#node_cluster.attr["label"] = str(num_cluster) + " " + " ".join(self.cluster_labels[num_cluster])
 		if left not in tree.nodes():
 			tree.add_node(left)
 		if left not in tree.nodes():
